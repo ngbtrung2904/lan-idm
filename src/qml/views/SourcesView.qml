@@ -212,6 +212,210 @@ ColumnLayout {
                         Accessible.role: Accessible.AlertMessage
                         Accessible.name: text
                     }
+
+                    // Divider above optional media toggles
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 2
+                        height: 1
+                        color: Theme.divider
+                    }
+
+                    // Optional media toggles row
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        Text {
+                            text: qsTr("Optional media")
+                            font.family: Theme.fontSans
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                            color: Theme.muted
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        // Include pictures checkbox (44px min height)
+                        AbstractButton {
+                            id: includePicturesBox
+                            implicitWidth: picturesCheckRow.implicitWidth + 8
+                            implicitHeight: Theme.minHitTarget
+                            checkable: true
+                            checked: sourcesController.includePictures
+                            focusPolicy: Qt.StrongFocus
+                            hoverEnabled: true
+
+                            Accessible.role: Accessible.CheckBox
+                            Accessible.name: qsTr("Include pictures")
+                            Accessible.checked: checked
+
+                            onClicked: {
+                                var next = !sourcesController.includePictures;
+                                sourcesController.includePictures = next;
+                                checked = Qt.binding(function() { return sourcesController.includePictures; });
+                            }
+
+                            contentItem: Item {
+                                Row {
+                                    id: picturesCheckRow
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 8
+
+                                    Item {
+                                        width: 22
+                                        height: 22
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 22
+                                            height: 22
+                                            radius: 6
+                                            color: "transparent"
+                                            border.color: Theme.primary
+                                            border.width: Theme.focusRingWidth
+                                            visible: includePicturesBox.activeFocus
+                                        }
+
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 18
+                                            height: 18
+                                            radius: 4
+                                            color: includePicturesBox.checked ? Theme.primary : Theme.panel
+                                            border.color: includePicturesBox.checked ? Theme.primary : Theme.border
+                                            border.width: 1.5
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                visible: includePicturesBox.checked
+                                                text: "\u2713"
+                                                font.family: Theme.fontSans
+                                                font.pixelSize: 12
+                                                font.weight: Font.Bold
+                                                color: "#FFFFFF"
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        text: qsTr("Include pictures")
+                                        font.family: Theme.fontSans
+                                        font.pixelSize: 13
+                                        font.weight: Font.Medium
+                                        color: Theme.text
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    Text {
+                                        text: "~/Pictures/lightshot"
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 12
+                                        color: Theme.muted
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
+                            }
+                        }
+
+                        // Include screen recordings checkbox (44px min height)
+                        AbstractButton {
+                            id: includeRecordingsBox
+                            implicitWidth: recordingsCheckRow.implicitWidth + 8
+                            implicitHeight: Theme.minHitTarget
+                            checkable: true
+                            checked: sourcesController.includeRecordings
+                            focusPolicy: Qt.StrongFocus
+                            hoverEnabled: true
+
+                            Accessible.role: Accessible.CheckBox
+                            Accessible.name: qsTr("Include screen recordings")
+                            Accessible.checked: checked
+
+                            onClicked: {
+                                var next = !sourcesController.includeRecordings;
+                                sourcesController.includeRecordings = next;
+                                checked = Qt.binding(function() { return sourcesController.includeRecordings; });
+                            }
+
+                            contentItem: Item {
+                                Row {
+                                    id: recordingsCheckRow
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 8
+
+                                    Item {
+                                        width: 22
+                                        height: 22
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 22
+                                            height: 22
+                                            radius: 6
+                                            color: "transparent"
+                                            border.color: Theme.primary
+                                            border.width: Theme.focusRingWidth
+                                            visible: includeRecordingsBox.activeFocus
+                                        }
+
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 18
+                                            height: 18
+                                            radius: 4
+                                            color: includeRecordingsBox.checked ? Theme.primary : Theme.panel
+                                            border.color: includeRecordingsBox.checked ? Theme.primary : Theme.border
+                                            border.width: 1.5
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                visible: includeRecordingsBox.checked
+                                                text: "\u2713"
+                                                font.family: Theme.fontSans
+                                                font.pixelSize: 12
+                                                font.weight: Font.Bold
+                                                color: "#FFFFFF"
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        text: qsTr("Include screen recordings")
+                                        font.family: Theme.fontSans
+                                        font.pixelSize: 13
+                                        font.weight: Font.Medium
+                                        color: Theme.text
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    Text {
+                                        text: "~/recordings/"
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 12
+                                        color: Theme.muted
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Text {
+                            text: qsTr("Applies to supported PCs only")
+                            font.family: Theme.fontSans
+                            font.pixelSize: 12
+                            color: Theme.muted
+                            elide: Text.ElideRight
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                    }
                 }
             }
 
@@ -296,7 +500,8 @@ ColumnLayout {
                             Text {
                                 text: qsTr("PC")
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 200
+                                Layout.minimumWidth: 140
+                                Layout.preferredWidth: 180
                                 font.family: Theme.fontSans
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
@@ -306,7 +511,8 @@ ColumnLayout {
 
                             Text {
                                 text: qsTr("STATUS")
-                                Layout.preferredWidth: 150
+                                Layout.minimumWidth: 135
+                                Layout.preferredWidth: 135
                                 font.family: Theme.fontSans
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
@@ -316,7 +522,8 @@ ColumnLayout {
 
                             Text {
                                 text: qsTr("LOGS")
-                                Layout.preferredWidth: 140
+                                Layout.minimumWidth: 115
+                                Layout.preferredWidth: 115
                                 font.family: Theme.fontSans
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
@@ -325,8 +532,20 @@ ColumnLayout {
                             }
 
                             Text {
-                                text: qsTr("SCREENSHOTS")
-                                Layout.preferredWidth: 165
+                                text: qsTr("PICTURES")
+                                Layout.minimumWidth: 125
+                                Layout.preferredWidth: 125
+                                font.family: Theme.fontSans
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: 0.6
+                                color: Theme.muted
+                            }
+
+                            Text {
+                                text: qsTr("RECORDINGS")
+                                Layout.minimumWidth: 125
+                                Layout.preferredWidth: 125
                                 font.family: Theme.fontSans
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
@@ -336,7 +555,8 @@ ColumnLayout {
 
                             Text {
                                 text: qsTr("TOTAL")
-                                Layout.preferredWidth: 110
+                                Layout.minimumWidth: 95
+                                Layout.preferredWidth: 95
                                 font.family: Theme.fontSans
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
@@ -432,7 +652,8 @@ ColumnLayout {
                                 // PC id + host
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    Layout.preferredWidth: 200
+                                    Layout.minimumWidth: 140
+                                    Layout.preferredWidth: 180
                                     spacing: 2
 
                                     Text {
@@ -457,7 +678,8 @@ ColumnLayout {
 
                                 // Status chip
                                 Item {
-                                    Layout.preferredWidth: 150
+                                    Layout.minimumWidth: 135
+                                    Layout.preferredWidth: 135
                                     implicitHeight: statusChip.implicitHeight
 
                                     StatusChip {
@@ -470,10 +692,11 @@ ColumnLayout {
                                     }
                                 }
 
-                                // Online data columns (LOGS, SCREENSHOTS, TOTAL)
+                                // Online data columns (LOGS, PICTURES, RECORDINGS, TOTAL)
                                 ColumnLayout {
                                     visible: model.state === 2
-                                    Layout.preferredWidth: 140
+                                    Layout.minimumWidth: 115
+                                    Layout.preferredWidth: 115
                                     spacing: 2
 
                                     Text {
@@ -493,10 +716,20 @@ ColumnLayout {
 
                                 ColumnLayout {
                                     visible: model.state === 2
-                                    Layout.preferredWidth: 165
+                                    Layout.minimumWidth: 125
+                                    Layout.preferredWidth: 125
                                     spacing: 2
 
                                     Text {
+                                        visible: !model.supportsPictures || !sourcesController.includePictures
+                                        text: !model.supportsPictures ? qsTr("N/A") : qsTr("Off")
+                                        font.family: Theme.fontSans
+                                        font.pixelSize: 13
+                                        color: Theme.muted
+                                    }
+
+                                    Text {
+                                        visible: model.supportsPictures && sourcesController.includePictures
                                         text: Fmt.formatBytes(model.shotsBytes)
                                         font.family: Theme.fontSans
                                         font.pixelSize: 14
@@ -504,7 +737,39 @@ ColumnLayout {
                                     }
 
                                     Text {
+                                        visible: model.supportsPictures && sourcesController.includePictures
                                         text: Fmt.formatFileCount(model.shotsCount)
+                                        font.family: Theme.fontSans
+                                        font.pixelSize: 12
+                                        color: Theme.muted
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    visible: model.state === 2
+                                    Layout.minimumWidth: 125
+                                    Layout.preferredWidth: 125
+                                    spacing: 2
+
+                                    Text {
+                                        visible: !model.supportsRecordings || !sourcesController.includeRecordings
+                                        text: !model.supportsRecordings ? qsTr("N/A") : qsTr("Off")
+                                        font.family: Theme.fontSans
+                                        font.pixelSize: 13
+                                        color: Theme.muted
+                                    }
+
+                                    Text {
+                                        visible: model.supportsRecordings && sourcesController.includeRecordings
+                                        text: Fmt.formatBytes(model.recordingsBytes)
+                                        font.family: Theme.fontSans
+                                        font.pixelSize: 14
+                                        color: Theme.text
+                                    }
+
+                                    Text {
+                                        visible: model.supportsRecordings && sourcesController.includeRecordings
+                                        text: Fmt.formatFileCount(model.recordingsCount)
                                         font.family: Theme.fontSans
                                         font.pixelSize: 12
                                         color: Theme.muted
@@ -513,7 +778,8 @@ ColumnLayout {
 
                                 Text {
                                     visible: model.state === 2
-                                    Layout.preferredWidth: 110
+                                    Layout.minimumWidth: 95
+                                    Layout.preferredWidth: 95
                                     text: Fmt.formatBytes(model.totalBytes)
                                     font.family: Theme.fontSans
                                     font.pixelSize: 14
@@ -524,7 +790,8 @@ ColumnLayout {
                                 // Non-online spanning status message
                                 Text {
                                     visible: model.state !== 2
-                                    Layout.preferredWidth: 140 + 165 + 110 + 24
+                                    Layout.minimumWidth: 115 + 125 + 125 + 95 + 36
+                                    Layout.preferredWidth: 115 + 125 + 125 + 95 + 36
                                     text: model.statusMessage !== "" ? model.statusMessage : model.stateText
                                     font.family: Theme.fontSans
                                     font.pixelSize: 13

@@ -1,6 +1,7 @@
 #include "TimeFilter.h"
 
 #include <QRegularExpression>
+#include <QTime>
 
 namespace dc {
 
@@ -28,10 +29,51 @@ QDate TimeFilter::extractFilenameDate(const QString &relPath) {
     return {};
 }
 
+QDateTime TimeFilter::extractFilenameDateTime(const QString &relPath) {
+    const int slashPos = relPath.lastIndexOf(QLatin1Char('/'));
+    const QString baseName = (slashPos >= 0) ? relPath.mid(slashPos + 1) : relPath;
+    if (baseName.isEmpty()) {
+        return {};
+    }
+
+    auto tryMatch = [&baseName](const QRegularExpression &regex) -> QDateTime {
+        QRegularExpressionMatchIterator it = regex.globalMatch(baseName);
+        while (it.hasNext()) {
+            const QRegularExpressionMatch match = it.next();
+            const int year = match.captured(1).toInt();
+            const int month = match.captured(2).toInt();
+            const int day = match.captured(3).toInt();
+            const int hour = match.captured(4).toInt();
+            const int minute = match.captured(5).toInt();
+            const int second = match.captured(6).toInt();
+            if (QDate::isValid(year, month, day) && QTime::isValid(hour, minute, second)) {
+                const QDateTime dt(QDate(year, month, day), QTime(hour, minute, second), Qt::LocalTime);
+                if (dt.isValid()) {
+                    return dt;
+                }
+            }
+        }
+        return {};
+    };
+
+    static const QRegularExpression kDashedDateTimeRegex(
+        QStringLiteral("(?<!\\d)(\\d{4})-(\\d{2})-(\\d{2})[_T-](\\d{2})-(\\d{2})-(\\d{2})(?!\\d)"));
+    const QDateTime dashed = tryMatch(kDashedDateTimeRegex);
+    if (dashed.isValid()) {
+        return dashed;
+    }
+
+    static const QRegularExpression kCompactDateTimeRegex(
+        QStringLiteral("(?<!\\d)(\\d{4})(\\d{2})(\\d{2})[_-](\\d{2})(\\d{2})(\\d{2})(?!\\d)"));
+    return tryMatch(kCompactDateTimeRegex);
+}
+
 FilteredPc TimeFilter::filterPc(const PcListing &listing,
                                 const QVector<LogSourceConfig> &logSources,
                                 const TimeWindow &window,
-                                bool logsIncludeModifiedAfterEnd) {
+                                bool logsIncludeModifiedAfterEnd,
+                                bool includePictures,
+                                bool includeRecordings) {
     FilteredPc result;
     result.pcId = listing.pcId;
 
@@ -39,13 +81,31 @@ FilteredPc TimeFilter::filterPc(const PcListing &listing,
         return result;
     }
 
-    for (const FileEntry &entry : listing.screenshots) {
-        if (!entry.mtime.isValid()) {
-            continue;
+    if (includePictures) {
+        for (const FileEntry &entry : listing.screenshots) {
+            const QDateTime fnDt = extractFilenameDateTime(entry.relPath);
+            const QDateTime ts = fnDt.isValid() ? fnDt : entry.mtime;
+            if (!ts.isValid()) {
+                continue;
+            }
+            if (ts >= window.start && ts <= window.end) {
+                result.screenshots.append(entry);
+                result.shotsBytes += entry.size;
+            }
         }
-        if (entry.mtime >= window.start && entry.mtime <= window.end) {
-            result.screenshots.append(entry);
-            result.shotsBytes += entry.size;
+    }
+
+    if (includeRecordings) {
+        for (const FileEntry &entry : listing.recordings) {
+            const QDateTime fnDt = extractFilenameDateTime(entry.relPath);
+            const QDateTime ts = fnDt.isValid() ? fnDt : entry.mtime;
+            if (!ts.isValid()) {
+                continue;
+            }
+            if (ts >= window.start && ts <= window.end) {
+                result.recordings.append(entry);
+                result.recordingsBytes += entry.size;
+            }
         }
     }
 

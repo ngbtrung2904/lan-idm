@@ -5,7 +5,8 @@
   "maxParallel": 2,
   "paths": {
     "logs": ".app",
-    "screenshots": "screenshot"
+    "screenshots": "Pictures/lightshot",
+    "recordings": "recordings"
   },
   "logs": {
     "includeModifiedAfterEnd": true
@@ -20,6 +21,8 @@
     {
       "id": "pc07",
       "host": "192.168.10.17",
+      "supportsPictures": false,
+      "supportsRecordings": false,
       "logSources": [
         {
           "name": "syslog",

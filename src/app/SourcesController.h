@@ -34,9 +34,13 @@ public:
         int logsCount = 0;
         qint64 shotsBytes = 0;
         int shotsCount = 0;
+        qint64 recordingsBytes = 0;
+        int recordingsCount = 0;
+        bool supportsPictures = true;
+        bool supportsRecordings = true;
         bool selected = false;
 
-        qint64 totalBytes() const { return logsBytes + shotsBytes; }
+        qint64 totalBytes() const { return logsBytes + shotsBytes + recordingsBytes; }
         bool selectable() const { return state == PcState::Online; }
     };
 
@@ -50,6 +54,10 @@ public:
         LogsCountRole,
         ShotsBytesRole,
         ShotsCountRole,
+        RecordingsBytesRole,
+        RecordingsCountRole,
+        SupportsPicturesRole,
+        SupportsRecordingsRole,
         TotalBytesRole,
         SelectedRole,
         SelectableRole
@@ -129,6 +137,8 @@ class SourcesController : public QObject {
     Q_PROPERTY(bool fits READ fits NOTIFY estimateChanged)
     Q_PROPERTY(int fittingPcCount READ fittingPcCount NOTIFY estimateChanged)
     Q_PROPERTY(QString destinationPreview READ destinationPreview NOTIFY drivesChanged)
+    Q_PROPERTY(bool includePictures READ includePictures WRITE setIncludePictures NOTIFY mediaOptionsChanged)
+    Q_PROPERTY(bool includeRecordings READ includeRecordings WRITE setIncludeRecordings NOTIFY mediaOptionsChanged)
     Q_PROPERTY(bool canStart READ canStart NOTIFY canStartChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
 
@@ -168,6 +178,10 @@ public:
     bool fits() const { return mFits; }
     int fittingPcCount() const { return mFittingPcCount; }
     QString destinationPreview() const;
+    bool includePictures() const { return mIncludePictures; }
+    void setIncludePictures(bool include);
+    bool includeRecordings() const { return mIncludeRecordings; }
+    void setIncludeRecordings(bool include);
     bool canStart() const;
     bool busy() const { return mBusy; }
 
@@ -191,6 +205,7 @@ signals:
     void windowChanged();
     void selectionChanged();
     void drivesChanged();
+    void mediaOptionsChanged();
     void estimateChanged();
     void canStartChanged();
     void busyChanged();
@@ -233,6 +248,8 @@ private:
     QHash<QString, FilteredPc> mFiltered;
 
     int mSelectedDriveIndex = -1;
+    bool mIncludePictures = true;
+    bool mIncludeRecordings = false;
     bool mFits = false;
     int mFittingPcCount = 0;
     bool mBusy = false;

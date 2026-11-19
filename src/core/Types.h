@@ -26,7 +26,8 @@ enum class JobState {
     DoneWithWarnings,
     Failed,
     Cancelled,
-    Skipped
+    Skipped,
+    CopyingRecordings = 9
 };
 
 enum class TimestampSource {
@@ -46,11 +47,14 @@ struct PcConfig {
     QString host;
     int port = 22;
     QVector<LogSourceConfig> logSources;
+    bool supportsPictures = true;
+    bool supportsRecordings = true;
 };
 
 struct PathsConfig {
     QString logs = QStringLiteral(".app");
-    QString screenshots = QStringLiteral("screenshot");
+    QString screenshots = QStringLiteral("Pictures/lightshot");
+    QString recordings = QStringLiteral("recordings");
 };
 
 struct LogsConfig {
@@ -78,6 +82,7 @@ struct PcListing {
     QString pcId;
     QVector<FileEntry> logs;
     QVector<FileEntry> screenshots;
+    QVector<FileEntry> recordings;
 };
 
 struct TimeWindow {
@@ -93,10 +98,12 @@ struct FilteredPc {
     QString pcId;
     QVector<FileEntry> logs;
     QVector<FileEntry> screenshots;
+    QVector<FileEntry> recordings;
     qint64 logsBytes = 0;
     qint64 shotsBytes = 0;
+    qint64 recordingsBytes = 0;
 
-    qint64 totalBytes() const { return logsBytes + shotsBytes; }
+    qint64 totalBytes() const { return logsBytes + shotsBytes + recordingsBytes; }
 };
 
 struct UsbDrive {
@@ -125,8 +132,12 @@ struct PcTransferResult {
     int shotsFilesPlanned = 0;
     int shotsFilesCopied = 0;
     qint64 shotsBytesCopied = 0;
+    int recordingsFilesPlanned = 0;
+    int recordingsFilesCopied = 0;
+    qint64 recordingsBytesCopied = 0;
     int logsRsyncExitCode = -1;
     int shotsRsyncExitCode = -1;
+    int recordingsRsyncExitCode = -1;
     QStringList errors;
 };
 
@@ -171,6 +182,7 @@ inline QString jobStateText(JobState state) {
     case JobState::Queued:             return QStringLiteral("Queued");
     case JobState::CopyingLogs:        return QStringLiteral("Copying logs");
     case JobState::CopyingScreenshots: return QStringLiteral("Copying screenshots");
+    case JobState::CopyingRecordings:  return QStringLiteral("Copying recordings");
     case JobState::Verifying:          return QStringLiteral("Verifying");
     case JobState::Done:               return QStringLiteral("Done");
     case JobState::DoneWithWarnings:   return QStringLiteral("Done with warnings");

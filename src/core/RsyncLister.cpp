@@ -25,6 +25,8 @@ namespace dc {
 namespace {
 
 constexpr int kKillTimeoutMs = 500;
+constexpr int kShotsSourceIndex = -1;
+constexpr int kRecordingsSourceIndex = -2;
 
 void configureRsyncChildProcess(QProcess *proc) {
 #ifdef Q_OS_LINUX
@@ -100,6 +102,7 @@ RsyncLister::~RsyncLister() {
             stopProcessSync(proc.get(), this);
         }
         stopProcessSync(entry.second.shotsProc.get(), this);
+        stopProcessSync(entry.second.recordingsProc.get(), this);
     }
     mJobs.clear();
 
@@ -323,6 +326,7 @@ void RsyncLister::listPc(const PcConfig &pc,
                          const QString &sshUser,
                          const QVector<LogSourceConfig> &logSources,
                          const QString &shotsRelDir,
+                         const QString &recordingsRelDir,
                          const SshParams &sshParams) {
     cleanupJob(pc.id, false);
 
@@ -330,10 +334,23 @@ void RsyncLister::listPc(const PcConfig &pc,
     params.port = pc.port;
     const QString sshCmd = SshOptions::buildRsyncSshCommand(params);
 
+    const bool listShots = pc.supportsPictures && !shotsRelDir.trimmed().isEmpty();
+    const bool listRecordings = pc.supportsRecordings && !recordingsRelDir.trimmed().isEmpty();
+
     PendingJob job;
     job.listing.pcId = pc.id;
     job.logProcs.resize(static_cast<size_t>(logSources.size()));
-    job.pendingCount = logSources.size() + 1;
+    job.pendingCount = logSources.size() + (listShots ? 1 : 0) + (listRecordings ? 1 : 0);
+
+    if (job.pendingCount == 0) {
+        const PcListing emptyListing = job.listing;
+        const QString pcId = pc.id;
+        QMetaObject::invokeMethod(
+            this, [this, pcId, emptyListing]() { emit listingFinished(pcId, emptyListing); },
+            Qt::QueuedConnection);
+        return;
+    }
+
     mJobs.emplace(pc.id, std::move(job));
 
     for (int i = 0; i < logSources.size(); ++i) {
@@ -343,9 +360,17 @@ void RsyncLister::listPc(const PcConfig &pc,
         startDirProcess(pc.id, i, src.name, sshCmd, logsRemote);
     }
 
-    const QString shotsRemote = QStringLiteral("%1@%2:%3")
-                                    .arg(sshUser, pc.host, normalizeRemoteDir(shotsRelDir));
-    startDirProcess(pc.id, -1, QStringLiteral("screenshots"), sshCmd, shotsRemote);
+    if (listShots) {
+        const QString shotsRemote = QStringLiteral("%1@%2:%3")
+                                        .arg(sshUser, pc.host, normalizeRemoteDir(shotsRelDir));
+        startDirProcess(pc.id, kShotsSourceIndex, QStringLiteral("screenshots"), sshCmd, shotsRemote);
+    }
+
+    if (listRecordings) {
+        const QString recordingsRemote = QStringLiteral("%1@%2:%3")
+                                             .arg(sshUser, pc.host, normalizeRemoteDir(recordingsRelDir));
+        startDirProcess(pc.id, kRecordingsSourceIndex, QStringLiteral("recordings"), sshCmd, recordingsRemote);
+    }
 }
 
 void RsyncLister::startDirProcess(const QString &pcId,
@@ -365,8 +390,10 @@ void RsyncLister::startDirProcess(const QString &pcId,
 
     if (sourceIndex >= 0) {
         it->second.logProcs[static_cast<size_t>(sourceIndex)] = std::move(procOwner);
-    } else {
+    } else if (sourceIndex == kShotsSourceIndex) {
         it->second.shotsProc = std::move(procOwner);
+    } else {
+        it->second.recordingsProc = std::move(procOwner);
     }
 
     connect(proc, &QProcess::finished, this,
@@ -381,8 +408,10 @@ void RsyncLister::startDirProcess(const QString &pcId,
                         return;
                     }
                     slot = &jobIt->second.logProcs[static_cast<size_t>(sourceIndex)];
-                } else {
+                } else if (sourceIndex == kShotsSourceIndex) {
                     slot = &jobIt->second.shotsProc;
+                } else {
+                    slot = &jobIt->second.recordingsProc;
                 }
                 if (slot->get() != proc) {
                     return;
@@ -393,7 +422,15 @@ void RsyncLister::startDirProcess(const QString &pcId,
                 const QString stderrText = QString::fromUtf8(finishedProc->readAllStandardError()).trimmed();
                 retireProcessAsync(std::move(finishedProc));
 
-                if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+                const bool isOptionalMedia = (sourceIndex < 0);
+                const bool missingOptionalDir =
+                    isOptionalMedia
+                    && exitStatus == QProcess::NormalExit
+                    && exitCode == 23
+                    && (stderrText.contains(QStringLiteral("No such file or directory"), Qt::CaseInsensitive)
+                        || stderrText.contains(QStringLiteral("change_dir"), Qt::CaseInsensitive));
+
+                if (exitStatus != QProcess::NormalExit || (exitCode != 0 && !missingOptionalDir)) {
                     const QString kind = sourceName.isEmpty() ? QStringLiteral("logs") : sourceName;
                     const QString errMsg = stderrText.isEmpty()
                                                ? QStringLiteral("Failed listing %1 (rsync exit %2)")
@@ -406,15 +443,19 @@ void RsyncLister::startDirProcess(const QString &pcId,
                     return;
                 }
 
-                if (sourceIndex >= 0) {
-                    QVector<FileEntry> parsed = parseListOutput(stdoutData);
-                    jobIt->second.listing.logs.reserve(jobIt->second.listing.logs.size() + parsed.size());
-                    for (FileEntry &entry : parsed) {
-                        entry.sourceIndex = sourceIndex;
-                        jobIt->second.listing.logs.append(std::move(entry));
+                if (!missingOptionalDir) {
+                    if (sourceIndex >= 0) {
+                        QVector<FileEntry> parsed = parseListOutput(stdoutData);
+                        jobIt->second.listing.logs.reserve(jobIt->second.listing.logs.size() + parsed.size());
+                        for (FileEntry &entry : parsed) {
+                            entry.sourceIndex = sourceIndex;
+                            jobIt->second.listing.logs.append(std::move(entry));
+                        }
+                    } else if (sourceIndex == kShotsSourceIndex) {
+                        jobIt->second.listing.screenshots = parseListOutput(stdoutData);
+                    } else {
+                        jobIt->second.listing.recordings = parseListOutput(stdoutData);
                     }
-                } else {
-                    jobIt->second.listing.screenshots = parseListOutput(stdoutData);
                 }
 
                 --jobIt->second.pendingCount;
@@ -440,8 +481,10 @@ void RsyncLister::startDirProcess(const QString &pcId,
                         return;
                     }
                     slot = &jobIt->second.logProcs[static_cast<size_t>(sourceIndex)];
-                } else {
+                } else if (sourceIndex == kShotsSourceIndex) {
                     slot = &jobIt->second.shotsProc;
+                } else {
+                    slot = &jobIt->second.recordingsProc;
                 }
                 if (slot->get() != proc) {
                     return;
@@ -471,6 +514,7 @@ void RsyncLister::cleanupJob(const QString &pcId, bool syncWait) {
     }
     std::vector<std::unique_ptr<QProcess>> logProcs = std::move(it->second.logProcs);
     std::unique_ptr<QProcess> shotsProc = std::move(it->second.shotsProc);
+    std::unique_ptr<QProcess> recordingsProc = std::move(it->second.recordingsProc);
     mJobs.erase(it);
 
     if (syncWait) {
@@ -478,11 +522,13 @@ void RsyncLister::cleanupJob(const QString &pcId, bool syncWait) {
             stopProcessSync(proc.get(), this);
         }
         stopProcessSync(shotsProc.get(), this);
+        stopProcessSync(recordingsProc.get(), this);
     } else {
         for (std::unique_ptr<QProcess> &proc : logProcs) {
             retireProcessAsync(std::move(proc));
         }
         retireProcessAsync(std::move(shotsProc));
+        retireProcessAsync(std::move(recordingsProc));
     }
 }
 

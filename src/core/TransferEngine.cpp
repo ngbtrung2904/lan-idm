@@ -392,6 +392,7 @@ void TransferEngine::startSession(const AppConfig &config,
         job.status.result.host = spec.pc.host;
         job.status.result.logsFilesPlanned = spec.files.logs.size();
         job.status.result.shotsFilesPlanned = spec.files.screenshots.size();
+        job.status.result.recordingsFilesPlanned = spec.files.recordings.size();
 
         if (spec.skipped) {
             job.status.state = JobState::Skipped;
@@ -424,6 +425,7 @@ int TransferEngine::activeJobCount() const {
     for (const InternalJob &job : mJobs) {
         if (job.status.state == JobState::CopyingLogs
             || job.status.state == JobState::CopyingScreenshots
+            || job.status.state == JobState::CopyingRecordings
             || job.status.state == JobState::Verifying) {
             ++count;
         }
@@ -456,6 +458,8 @@ void TransferEngine::startJob(int index) {
     InternalJob &job = mJobs[static_cast<size_t>(index)];
     job.logsProgressBytes = 0;
     job.shotsProgressBytes = 0;
+    job.shotsCompletedBytes = 0;
+    job.recordingsProgressBytes = 0;
     job.resolvedLogSources = resolveLogSources(job.spec.pc, mConfig.paths);
     job.logsSubStageIndex = 0;
     job.logsCompletedBytes = 0;
@@ -473,20 +477,18 @@ void TransferEngine::startJob(int index) {
     job.status.result.logsBytesCopied = 0;
     job.status.result.shotsFilesCopied = 0;
     job.status.result.shotsBytesCopied = 0;
+    job.status.result.recordingsFilesCopied = 0;
+    job.status.result.recordingsBytesCopied = 0;
     job.status.result.logsRsyncExitCode = -1;
     job.status.result.shotsRsyncExitCode = -1;
+    job.status.result.recordingsRsyncExitCode = -1;
     job.status.result.errors.clear();
 
     if (!job.spec.files.logs.isEmpty()) {
         startNextLogsSubStage(index);
     } else {
         job.status.result.logsRsyncExitCode = 0;
-        if (!job.spec.files.screenshots.isEmpty()) {
-            startStage(index, false, -1, job.spec.files.screenshots);
-        } else {
-            job.status.result.shotsRsyncExitCode = 0;
-            verifyJob(index);
-        }
+        advanceAfterLogs(index);
     }
 }
 
@@ -508,7 +510,7 @@ void TransferEngine::startNextLogsSubStage(int index) {
         }
         if (!sourceEntries.isEmpty()) {
             job.currentSubStagePlannedBytes = sourceBytes;
-            startStage(index, true, srcIdx, sourceEntries);
+            startStage(index, TransferStage::Logs, srcIdx, sourceEntries);
             return;
         }
         ++job.logsSubStageIndex;
@@ -516,16 +518,42 @@ void TransferEngine::startNextLogsSubStage(int index) {
 
     job.logsProgressBytes = job.spec.files.logsBytes;
     job.status.result.logsRsyncExitCode = job.worstLogsExitCode;
-    if (!job.spec.files.screenshots.isEmpty()) {
-        startStage(index, false, -1, job.spec.files.screenshots);
+    advanceAfterLogs(index);
+}
+
+void TransferEngine::advanceAfterLogs(int index) {
+    if (mPhase != EnginePhase::Running) {
+        return;
+    }
+
+    InternalJob &job = mJobs[static_cast<size_t>(index)];
+    if (!job.spec.files.screenshots.isEmpty() && job.spec.pc.supportsPictures) {
+        startStage(index, TransferStage::Screenshots, -1, job.spec.files.screenshots);
     } else {
         job.status.result.shotsRsyncExitCode = 0;
+        job.shotsCompletedBytes = job.spec.files.shotsBytes;
+        job.shotsProgressBytes = job.shotsCompletedBytes;
+        advanceAfterScreenshots(index);
+    }
+}
+
+void TransferEngine::advanceAfterScreenshots(int index) {
+    if (mPhase != EnginePhase::Running) {
+        return;
+    }
+
+    InternalJob &job = mJobs[static_cast<size_t>(index)];
+    if (!job.spec.files.recordings.isEmpty() && job.spec.pc.supportsRecordings) {
+        startStage(index, TransferStage::Recordings, -1, job.spec.files.recordings);
+    } else {
+        job.status.result.recordingsRsyncExitCode = 0;
+        job.recordingsProgressBytes = job.spec.files.recordingsBytes;
         verifyJob(index);
     }
 }
 
 void TransferEngine::startStage(int index,
-                                bool isLogs,
+                                TransferStage stage,
                                 int logsSourceIndex,
                                 const QVector<FileEntry> &entries) {
     if (mPhase != EnginePhase::Running) {
@@ -533,7 +561,12 @@ void TransferEngine::startStage(int index,
     }
 
     InternalJob &job = mJobs[static_cast<size_t>(index)];
-    const JobState stageState = isLogs ? JobState::CopyingLogs : JobState::CopyingScreenshots;
+    JobState stageState = JobState::CopyingLogs;
+    if (stage == TransferStage::Screenshots) {
+        stageState = JobState::CopyingScreenshots;
+    } else if (stage == TransferStage::Recordings) {
+        stageState = JobState::CopyingRecordings;
+    }
     job.status.state = stageState;
     job.status.result.state = stageState;
     job.status.rateBytesPerSec = 0.0;
@@ -552,9 +585,14 @@ void TransferEngine::startStage(int index,
         return;
     }
 
-    const QString listFileName = isLogs
-                                     ? QStringLiteral("%1_logs_%2.list").arg(job.spec.pc.id).arg(logsSourceIndex)
-                                     : QStringLiteral("%1_screenshots.list").arg(job.spec.pc.id);
+    QString listFileName;
+    if (stage == TransferStage::Logs) {
+        listFileName = QStringLiteral("%1_logs_%2.list").arg(job.spec.pc.id).arg(logsSourceIndex);
+    } else if (stage == TransferStage::Screenshots) {
+        listFileName = QStringLiteral("%1_screenshots.list").arg(job.spec.pc.id);
+    } else {
+        listFileName = QStringLiteral("%1_recordings.list").arg(job.spec.pc.id);
+    }
     const QString listFile = QDir(mTempDir->path()).filePath(listFileName);
 
     QString listErr;
@@ -567,15 +605,18 @@ void TransferEngine::startStage(int index,
 
     QString destDir;
     QString remoteRelDir;
-    if (isLogs) {
+    if (stage == TransferStage::Logs) {
         const LogSourceConfig &src = job.resolvedLogSources.at(logsSourceIndex);
         remoteRelDir = src.remotePath;
         destDir = src.destSubdir.isEmpty()
                       ? QDir(mSessionDir).filePath(QStringLiteral("%1/logs").arg(job.spec.pc.id))
                       : QDir(mSessionDir).filePath(QStringLiteral("%1/logs/%2").arg(job.spec.pc.id, src.destSubdir));
-    } else {
+    } else if (stage == TransferStage::Screenshots) {
         remoteRelDir = mConfig.paths.screenshots;
         destDir = QDir(mSessionDir).filePath(QStringLiteral("%1/screenshots").arg(job.spec.pc.id));
+    } else {
+        remoteRelDir = mConfig.paths.recordings;
+        destDir = QDir(mSessionDir).filePath(QStringLiteral("%1/recordings").arg(job.spec.pc.id));
     }
 
     if (!QDir().mkpath(destDir)) {
@@ -616,16 +657,16 @@ void TransferEngine::startStage(int index,
         appendStderrChunk(index, QString::fromUtf8(proc->readAllStandardError()));
     });
     connect(proc, &QProcess::finished, this,
-            [this, index, proc, isLogs](int exitCode, QProcess::ExitStatus exitStatus) {
-                handleProcessFinished(index, proc, isLogs, exitCode,
+            [this, index, proc, stage](int exitCode, QProcess::ExitStatus exitStatus) {
+                handleProcessFinished(index, proc, stage, exitCode,
                                       exitStatus == QProcess::NormalExit);
             });
     connect(proc, &QProcess::errorOccurred, this,
-            [this, index, proc, isLogs](QProcess::ProcessError err) {
+            [this, index, proc, stage](QProcess::ProcessError err) {
                 if (err != QProcess::FailedToStart) {
                     return;
                 }
-                handleProcessFailedToStart(index, proc, isLogs);
+                handleProcessFailedToStart(index, proc, stage);
             });
 
     proc->start(QStringLiteral("rsync"),
@@ -687,8 +728,14 @@ void TransferEngine::handleProcessOutput(int index, QProcess *proc) {
                         job.logsProgressBytes = job.logsCompletedBytes + parsed.bytesDone;
                     } else if (job.status.state == JobState::CopyingScreenshots) {
                         job.shotsProgressBytes = parsed.bytesDone;
+                    } else if (job.status.state == JobState::CopyingRecordings) {
+                        job.recordingsProgressBytes = parsed.bytesDone;
                     }
-                    qint64 combined = job.logsProgressBytes + job.shotsProgressBytes;
+                    const qint64 shotsEffectiveBytes =
+                        (job.status.state == JobState::CopyingRecordings)
+                            ? job.shotsCompletedBytes
+                            : job.shotsProgressBytes;
+                    qint64 combined = job.logsProgressBytes + shotsEffectiveBytes + job.recordingsProgressBytes;
                     if (job.status.totalBytes > 0) {
                         combined = qMin(combined, job.status.totalBytes);
                         job.status.percent = qBound(0, static_cast<int>(combined * 100 / job.status.totalBytes), 100);
@@ -717,7 +764,7 @@ void TransferEngine::handleProcessOutput(int index, QProcess *proc) {
     }
 }
 
-void TransferEngine::handleProcessFinished(int index, QProcess *proc, bool isLogs,
+void TransferEngine::handleProcessFinished(int index, QProcess *proc, TransferStage stage,
                                            int exitCode, bool normalExit) {
     if (index < 0 || index >= static_cast<int>(mJobs.size())) {
         return;
@@ -753,10 +800,13 @@ void TransferEngine::handleProcessFinished(int index, QProcess *proc, bool isLog
     const bool isOk = normalExit && (exitCode == 0);
 
     if (!isOk && !isPartialWarning) {
-        if (isLogs) {
-            job.status.result.logsRsyncExitCode = normalExit ? exitCode : -1;
+        const int recordedCode = normalExit ? exitCode : -1;
+        if (stage == TransferStage::Logs) {
+            job.status.result.logsRsyncExitCode = recordedCode;
+        } else if (stage == TransferStage::Screenshots) {
+            job.status.result.shotsRsyncExitCode = recordedCode;
         } else {
-            job.status.result.shotsRsyncExitCode = normalExit ? exitCode : -1;
+            job.status.result.recordingsRsyncExitCode = recordedCode;
         }
         const QString userMsg = classifyRsyncFailure(exitCode, normalExit,
                                                      job.stderrText.trimmed(),
@@ -769,24 +819,28 @@ void TransferEngine::handleProcessFinished(int index, QProcess *proc, bool isLog
         return;
     }
 
-    if (isLogs) {
+    if (stage == TransferStage::Logs) {
         if (isPartialWarning && job.worstLogsExitCode == 0) {
             job.worstLogsExitCode = exitCode;
         }
         job.status.result.logsRsyncExitCode = job.worstLogsExitCode;
-    } else {
+    } else if (stage == TransferStage::Screenshots) {
         job.status.result.shotsRsyncExitCode = exitCode;
+    } else {
+        job.status.result.recordingsRsyncExitCode = exitCode;
     }
 
     if (isPartialWarning) {
-        QString kind = QStringLiteral("screenshots");
-        if (isLogs) {
+        QString kind = QStringLiteral("recordings");
+        if (stage == TransferStage::Logs) {
             if (job.logsSubStageIndex >= 0 && job.logsSubStageIndex < job.resolvedLogSources.size()
                 && job.resolvedLogSources.size() > 1) {
                 kind = job.resolvedLogSources.at(job.logsSubStageIndex).name;
             } else {
                 kind = QStringLiteral("logs");
             }
+        } else if (stage == TransferStage::Screenshots) {
+            kind = QStringLiteral("screenshots");
         }
         const QString msg = QStringLiteral("%1: partial transfer of %2 (rsync exit %3)")
                                 .arg(job.spec.pc.id, kind)
@@ -795,18 +849,22 @@ void TransferEngine::handleProcessFinished(int index, QProcess *proc, bool isLog
         addWarning(msg);
     }
 
-    if (isLogs) {
+    if (stage == TransferStage::Logs) {
         job.logsCompletedBytes += job.currentSubStagePlannedBytes;
         job.logsProgressBytes = job.logsCompletedBytes;
         ++job.logsSubStageIndex;
         startNextLogsSubStage(index);
+    } else if (stage == TransferStage::Screenshots) {
+        job.shotsCompletedBytes = job.spec.files.shotsBytes;
+        job.shotsProgressBytes = job.shotsCompletedBytes;
+        advanceAfterScreenshots(index);
     } else {
-        job.shotsProgressBytes = job.spec.files.shotsBytes;
+        job.recordingsProgressBytes = job.spec.files.recordingsBytes;
         verifyJob(index);
     }
 }
 
-void TransferEngine::handleProcessFailedToStart(int index, QProcess *proc, bool /*isLogs*/) {
+void TransferEngine::handleProcessFailedToStart(int index, QProcess *proc, TransferStage /*stage*/) {
     if (index < 0 || index >= static_cast<int>(mJobs.size())) {
         return;
     }
@@ -851,15 +909,19 @@ void TransferEngine::verifyJob(int index) {
     const QString pcRoot = QDir(mSessionDir).filePath(job.spec.pc.id);
     const QString logsDir = QDir(pcRoot).filePath(QStringLiteral("logs"));
     const QString shotsDir = QDir(pcRoot).filePath(QStringLiteral("screenshots"));
+    const QString recordingsDir = QDir(pcRoot).filePath(QStringLiteral("recordings"));
     const quint64 generation = mSessionGeneration;
 
     const int plannedLogsCount = job.status.result.logsFilesPlanned;
     const int plannedShotsCount = job.status.result.shotsFilesPlanned;
+    const int plannedRecordingsCount = job.status.result.recordingsFilesPlanned;
     const qint64 plannedLogsBytes = job.spec.files.logsBytes;
     const qint64 plannedShotsBytes = job.spec.files.shotsBytes;
+    const qint64 plannedRecordingsBytes = job.spec.files.recordingsBytes;
     const bool hadPriorWarnings = !job.status.result.errors.isEmpty()
                                   || (job.status.result.logsRsyncExitCode != 0)
-                                  || (job.status.result.shotsRsyncExitCode != 0);
+                                  || (job.status.result.shotsRsyncExitCode != 0)
+                                  || (job.status.result.recordingsRsyncExitCode != 0);
 
     QStringList partialDirs;
     partialDirs.append(QDir(logsDir).filePath(QStringLiteral(".partial")));
@@ -869,12 +931,13 @@ void TransferEngine::verifyJob(int index) {
         }
     }
     partialDirs.append(QDir(shotsDir).filePath(QStringLiteral(".partial")));
+    partialDirs.append(QDir(recordingsDir).filePath(QStringLiteral(".partial")));
 
     QPointer<TransferEngine> self(this);
     QThreadPool::globalInstance()->start(QRunnable::create([self, generation, index,
-                                                            logsDir, shotsDir, partialDirs,
-                                                            plannedLogsCount, plannedShotsCount,
-                                                            plannedLogsBytes, plannedShotsBytes,
+                                                            logsDir, shotsDir, recordingsDir, partialDirs,
+                                                            plannedLogsCount, plannedShotsCount, plannedRecordingsCount,
+                                                            plannedLogsBytes, plannedShotsBytes, plannedRecordingsBytes,
                                                             hadPriorWarnings]() {
         int logsCount = 0;
         qint64 logsBytes = 0;
@@ -884,11 +947,17 @@ void TransferEngine::verifyJob(int index) {
         qint64 shotsBytes = 0;
         scanDirectoryStats(shotsDir, &shotsCount, &shotsBytes);
 
+        int recordingsCount = 0;
+        qint64 recordingsBytes = 0;
+        scanDirectoryStats(recordingsDir, &recordingsCount, &recordingsBytes);
+
         const bool clean = !hadPriorWarnings
                            && logsCount == plannedLogsCount
                            && shotsCount == plannedShotsCount
+                           && recordingsCount == plannedRecordingsCount
                            && logsBytes == plannedLogsBytes
-                           && shotsBytes == plannedShotsBytes;
+                           && shotsBytes == plannedShotsBytes
+                           && recordingsBytes == plannedRecordingsBytes;
         if (clean) {
             for (const QString &partialDir : partialDirs) {
                 QDir(partialDir).removeRecursively();
@@ -900,11 +969,14 @@ void TransferEngine::verifyJob(int index) {
         }
         QMetaObject::invokeMethod(
             self.data(),
-            [self, generation, index, logsCount, logsBytes, shotsCount, shotsBytes]() {
+            [self, generation, index, logsCount, logsBytes, shotsCount, shotsBytes, recordingsCount, recordingsBytes]() {
                 if (!self) {
                     return;
                 }
-                self->finishVerifyJob(generation, index, logsCount, logsBytes, shotsCount, shotsBytes);
+                self->finishVerifyJob(generation, index,
+                                      logsCount, logsBytes,
+                                      shotsCount, shotsBytes,
+                                      recordingsCount, recordingsBytes);
             },
             Qt::QueuedConnection);
     }));
@@ -912,7 +984,8 @@ void TransferEngine::verifyJob(int index) {
 
 void TransferEngine::finishVerifyJob(quint64 generation, int index,
                                      int logsCount, qint64 logsBytes,
-                                     int shotsCount, qint64 shotsBytes) {
+                                     int shotsCount, qint64 shotsBytes,
+                                     int recordingsCount, qint64 recordingsBytes) {
     if (generation != mSessionGeneration || mPhase != EnginePhase::Running) {
         return;
     }
@@ -928,10 +1001,13 @@ void TransferEngine::finishVerifyJob(quint64 generation, int index,
     job.status.result.logsBytesCopied = logsBytes;
     job.status.result.shotsFilesCopied = shotsCount;
     job.status.result.shotsBytesCopied = shotsBytes;
+    job.status.result.recordingsFilesCopied = recordingsCount;
+    job.status.result.recordingsBytesCopied = recordingsBytes;
 
     bool hasWarnings = !job.status.result.errors.isEmpty()
                        || (job.status.result.logsRsyncExitCode != 0)
-                       || (job.status.result.shotsRsyncExitCode != 0);
+                       || (job.status.result.shotsRsyncExitCode != 0)
+                       || (job.status.result.recordingsRsyncExitCode != 0);
 
     if (logsCount != job.status.result.logsFilesPlanned) {
         const QString msg = QStringLiteral("%1: expected %2 log files, verified %3")
@@ -947,6 +1023,15 @@ void TransferEngine::finishVerifyJob(quint64 generation, int index,
                                 .arg(job.spec.pc.id)
                                 .arg(job.status.result.shotsFilesPlanned)
                                 .arg(shotsCount);
+        job.status.result.errors.append(msg);
+        addWarning(msg);
+        hasWarnings = true;
+    }
+    if (recordingsCount != job.status.result.recordingsFilesPlanned) {
+        const QString msg = QStringLiteral("%1: expected %2 recording files, verified %3")
+                                .arg(job.spec.pc.id)
+                                .arg(job.status.result.recordingsFilesPlanned)
+                                .arg(recordingsCount);
         job.status.result.errors.append(msg);
         addWarning(msg);
         hasWarnings = true;
@@ -969,6 +1054,15 @@ void TransferEngine::finishVerifyJob(quint64 generation, int index,
         addWarning(msg);
         hasWarnings = true;
     }
+    if (recordingsBytes != job.spec.files.recordingsBytes) {
+        const QString msg = QStringLiteral("%1: recording bytes mismatch (expected %2, verified %3)")
+                                .arg(job.spec.pc.id)
+                                .arg(job.spec.files.recordingsBytes)
+                                .arg(recordingsBytes);
+        job.status.result.errors.append(msg);
+        addWarning(msg);
+        hasWarnings = true;
+    }
 
     if (!hasWarnings) {
         job.status.state = JobState::Done;
@@ -978,7 +1072,7 @@ void TransferEngine::finishVerifyJob(quint64 generation, int index,
     } else {
         job.status.state = JobState::DoneWithWarnings;
         job.status.result.state = JobState::DoneWithWarnings;
-        job.status.copiedBytes = qMin(job.status.totalBytes, logsBytes + shotsBytes);
+        job.status.copiedBytes = qMin(job.status.totalBytes, logsBytes + shotsBytes + recordingsBytes);
         job.status.percent = 100;
         job.status.errorMessage = QStringLiteral("Some files could not be verified. Check warnings or click Retry.");
     }
@@ -1019,6 +1113,7 @@ void TransferEngine::checkSessionFinished() {
         if (st == JobState::Queued
             || st == JobState::CopyingLogs
             || st == JobState::CopyingScreenshots
+            || st == JobState::CopyingRecordings
             || st == JobState::Verifying) {
             return;
         }
@@ -1072,6 +1167,7 @@ void TransferEngine::finalizeCancel() {
         if (st == JobState::Queued
             || st == JobState::CopyingLogs
             || st == JobState::CopyingScreenshots
+            || st == JobState::CopyingRecordings
             || st == JobState::Verifying) {
             job.status.state = JobState::Cancelled;
             job.status.result.state = JobState::Cancelled;
@@ -1103,6 +1199,7 @@ void TransferEngine::pauseForUsbRemoved() {
         const JobState st = job.status.state;
         if (st == JobState::CopyingLogs
             || st == JobState::CopyingScreenshots
+            || st == JobState::CopyingRecordings
             || st == JobState::Verifying) {
             job.status.state = JobState::Queued;
             job.status.result.state = JobState::Queued;
@@ -1273,7 +1370,8 @@ void TransferEngine::recomputeOverallProgress(bool recordEtaSample) {
         total += job.status.totalBytes;
         copied += job.status.copiedBytes;
         if (job.status.state == JobState::CopyingLogs
-            || job.status.state == JobState::CopyingScreenshots) {
+            || job.status.state == JobState::CopyingScreenshots
+            || job.status.state == JobState::CopyingRecordings) {
             rate += job.status.rateBytesPerSec;
         }
         if (job.status.state != JobState::Done

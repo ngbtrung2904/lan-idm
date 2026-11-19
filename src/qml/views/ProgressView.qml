@@ -21,7 +21,7 @@ ColumnLayout {
     readonly property bool isCancelled: transferController.phase === 6
 
     function isActiveStage(stage) {
-        return stage === 1 || stage === 2 || stage === 3; // CopyingLogs, CopyingScreenshots, Verifying
+        return stage === 1 || stage === 2 || stage === 3 || stage === 9; // CopyingLogs, CopyingScreenshots, Verifying, CopyingRecordings
     }
 
     function jobChipTone(stage) {

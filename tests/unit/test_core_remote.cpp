@@ -24,6 +24,7 @@ private slots:
     void configStoreInvalidMaxParallelAndPcs();
     void configStoreResolvePathPrecedence();
     void configStoreLogSourcesValidAndInvalid();
+    void configStoreMediaPathsAndSupportsFlags();
 
     // SshOptions
     void sshOptionsRequiredFlagsAndNeverStrictNo();
@@ -44,6 +45,8 @@ private slots:
     void timeFilterInvalidWindow();
     void timeFilterExtractFilenameDate();
     void timeFilterFilenameTimestampSources();
+    void timeFilterExtractFilenameDateTime();
+    void timeFilterMediaToggles();
 
     // SpaceEstimator
     void spaceEstimatorExactAndMarginBoundary();
@@ -449,7 +452,7 @@ void TestCoreRemote::timeFilterExactEdgesAndOutside() {
     };
 
     const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
-    const FilteredPc filtered = TimeFilter::filterPc(listing, defaultSources, window, true);
+    const FilteredPc filtered = TimeFilter::filterPc(listing, defaultSources, window, true, true, false);
     QCOMPARE(filtered.pcId, QStringLiteral("pc01"));
     QCOMPARE(filtered.screenshots.size(), 3);
     QCOMPARE(filtered.screenshots[0].relPath, QStringLiteral("at_start.png"));
@@ -472,11 +475,11 @@ void TestCoreRemote::timeFilterLogsRuleOnVsOff() {
     };
 
     const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
-    const FilteredPc ruleOn = TimeFilter::filterPc(listing, defaultSources, window, true);
+    const FilteredPc ruleOn = TimeFilter::filterPc(listing, defaultSources, window, true, true, false);
     QCOMPARE(ruleOn.logs.size(), 2);
     QCOMPARE(ruleOn.logsBytes, 600);
 
-    const FilteredPc ruleOff = TimeFilter::filterPc(listing, defaultSources, window, false);
+    const FilteredPc ruleOff = TimeFilter::filterPc(listing, defaultSources, window, false, true, false);
     QCOMPARE(ruleOff.logs.size(), 1);
     QCOMPARE(ruleOff.logs[0].relPath, QStringLiteral("mid.log"));
     QCOMPARE(ruleOff.logsBytes, 200);
@@ -501,7 +504,7 @@ void TestCoreRemote::timeFilterDstTransitionDay() {
     };
 
     const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
-    const FilteredPc filtered = TimeFilter::filterPc(listing, defaultSources, window, true);
+    const FilteredPc filtered = TimeFilter::filterPc(listing, defaultSources, window, true, true, false);
     QCOMPARE(filtered.screenshots.size(), 2);
     QCOMPARE(filtered.shotsBytes, 30);
 }
@@ -517,13 +520,13 @@ void TestCoreRemote::timeFilterInvalidWindow() {
     const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
 
     // start == end
-    const FilteredPc eqRes = TimeFilter::filterPc(listing, defaultSources, TimeWindow{t, t}, true);
+    const FilteredPc eqRes = TimeFilter::filterPc(listing, defaultSources, TimeWindow{t, t}, true, true, true);
     QVERIFY(eqRes.logs.isEmpty());
     QVERIFY(eqRes.screenshots.isEmpty());
     QCOMPARE(eqRes.totalBytes(), 0);
 
     // start > end
-    const FilteredPc revRes = TimeFilter::filterPc(listing, defaultSources, TimeWindow{t.addSecs(60), t}, true);
+    const FilteredPc revRes = TimeFilter::filterPc(listing, defaultSources, TimeWindow{t.addSecs(60), t}, true, true, true);
     QVERIFY(revRes.logs.isEmpty());
     QVERIFY(revRes.screenshots.isEmpty());
 }
@@ -571,7 +574,7 @@ void TestCoreRemote::timeFilterFilenameTimestampSources() {
         {QStringLiteral("kinfo/readme.txt"), 700, start.addSecs(60), 1}                       // no date in filename
     };
 
-    const FilteredPc filtered = TimeFilter::filterPc(listing, sources, window, true);
+    const FilteredPc filtered = TimeFilter::filterPc(listing, sources, window, true, true, false);
     QCOMPARE(filtered.logs.size(), 3);
     QCOMPARE(filtered.logs[0].relPath, QStringLiteral("appardp.LOG.20261101-002344.883159"));
     QCOMPARE(filtered.logs[0].sourceIndex, 0);
@@ -580,6 +583,169 @@ void TestCoreRemote::timeFilterFilenameTimestampSources() {
     QCOMPARE(filtered.logs[2].relPath, QStringLiteral("kinfo/kinfo-20261110_120000.dat"));
     QCOMPARE(filtered.logs[2].sourceIndex, 1);
     QCOMPARE(filtered.logsBytes, 1300);
+}
+
+void TestCoreRemote::configStoreMediaPathsAndSupportsFlags() {
+    // Defaults when paths and supports* are omitted
+    {
+        AppConfig cfg;
+        QString err;
+        const QByteArray json = R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "pcs": [
+                { "id": "pc01", "host": "192.168.10.11" },
+                { "id": "pc07", "host": "192.168.10.17", "supportsPictures": false, "supportsRecordings": false }
+            ]
+        })";
+        QVERIFY2(ConfigStore::parseJson(json, &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.paths.logs, QStringLiteral(".app"));
+        QCOMPARE(cfg.paths.screenshots, QStringLiteral("Pictures/lightshot"));
+        QCOMPARE(cfg.paths.recordings, QStringLiteral("recordings"));
+        QCOMPARE(cfg.pcs.size(), 2);
+        QCOMPARE(cfg.pcs[0].supportsPictures, true);
+        QCOMPARE(cfg.pcs[0].supportsRecordings, true);
+        QCOMPARE(cfg.pcs[1].supportsPictures, false);
+        QCOMPARE(cfg.pcs[1].supportsRecordings, false);
+    }
+
+    // Explicit paths.recordings
+    {
+        AppConfig cfg;
+        QString err;
+        const QByteArray json = R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "paths": {
+                "recordings": "custom_recs"
+            },
+            "pcs": [
+                { "id": "pc01", "host": "192.168.10.11" }
+            ]
+        })";
+        QVERIFY2(ConfigStore::parseJson(json, &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.paths.recordings, QStringLiteral("custom_recs"));
+    }
+
+    // Empty paths.recordings rejected
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY(!ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "paths": { "recordings": "   " },
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err));
+        QCOMPARE(err, QStringLiteral("Missing or invalid key: paths.recordings"));
+    }
+
+    // Non-boolean supportsPictures rejected
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY(!ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1", "supportsPictures": "false" }]
+        })", &cfg, &err));
+        QCOMPARE(err, QStringLiteral("Missing or invalid key: pcs[0].supportsPictures"));
+    }
+
+    // Non-boolean supportsRecordings rejected
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY(!ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1", "supportsRecordings": 0 }]
+        })", &cfg, &err));
+        QCOMPARE(err, QStringLiteral("Missing or invalid key: pcs[0].supportsRecordings"));
+    }
+}
+
+void TestCoreRemote::timeFilterExtractFilenameDateTime() {
+    QCOMPARE(TimeFilter::extractFilenameDateTime(
+                 QStringLiteral("screenshot_2026-11-19_22-31-40-115_screen0")),
+             QDateTime(QDate(2026, 11, 19), QTime(22, 31, 40), Qt::LocalTime));
+
+    QCOMPARE(TimeFilter::extractFilenameDateTime(
+                 QStringLiteral("sub/dir/screenshot_2026-11-19_22-31-40-115_screen0.png")),
+             QDateTime(QDate(2026, 11, 19), QTime(22, 31, 40), Qt::LocalTime));
+
+    QCOMPARE(TimeFilter::extractFilenameDateTime(
+                 QStringLiteral("rddm2-rec_Primary_20260929_105847_part000")),
+             QDateTime(QDate(2026, 9, 29), QTime(10, 58, 47), Qt::LocalTime));
+
+    QCOMPARE(TimeFilter::extractFilenameDateTime(
+                 QStringLiteral("20260929/rddm2-rec_Primary_20260929_105847_part000.mp4")),
+             QDateTime(QDate(2026, 9, 29), QTime(10, 58, 47), Qt::LocalTime));
+
+    // Invalid filenames / dates / times
+    QVERIFY(!TimeFilter::extractFilenameDateTime(QStringLiteral("plain.png")).isValid());
+    QVERIFY(!TimeFilter::extractFilenameDateTime(QStringLiteral("screenshot_2026-02-30_10-00-00.png")).isValid());
+    QVERIFY(!TimeFilter::extractFilenameDateTime(QStringLiteral("rddm2-rec_20260929_255847.mp4")).isValid());
+    QVERIFY(!TimeFilter::extractFilenameDateTime(QStringLiteral("2026-11-19_22-31-40/no_ts.png")).isValid());
+}
+
+void TestCoreRemote::timeFilterMediaToggles() {
+    const QDateTime start(QDate(2026, 11, 19), QTime(20, 0, 0), Qt::LocalTime);
+    const QDateTime end(QDate(2026, 11, 19), QTime(23, 0, 0), Qt::LocalTime);
+    const TimeWindow window{start, end};
+    const QDateTime staleMtime(QDate(2020, 1, 1), QTime(0, 0, 0), Qt::LocalTime);
+
+    PcListing listing;
+    listing.pcId = QStringLiteral("pc01");
+    listing.logs = {
+        {QStringLiteral("app.log"), 100, start.addSecs(60), 0}
+    };
+    listing.screenshots = {
+        {QStringLiteral("screenshot_2026-11-19_22-31-40-115_screen0.png"), 500, staleMtime, 0},
+        {QStringLiteral("screenshot_2026-11-19_19-59-59-000_screen0.png"), 600, start.addSecs(60), 0},
+        {QStringLiteral("fallback_mtime.png"), 700, start.addSecs(120), 0}
+    };
+    listing.recordings = {
+        {QStringLiteral("rddm2-rec_Primary_20261119_210500_part000.mp4"), 2000, staleMtime, 0},
+        {QStringLiteral("rddm2-rec_Primary_20260929_105847_part000.mp4"), 3000, start.addSecs(60), 0},
+        {QStringLiteral("fallback_rec.mp4"), 4000, start.addSecs(180), 0}
+    };
+
+    const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
+
+    // Both off -> only logs
+    const FilteredPc none = TimeFilter::filterPc(listing, defaultSources, window, true, false, false);
+    QCOMPARE(none.logs.size(), 1);
+    QCOMPARE(none.screenshots.size(), 0);
+    QCOMPARE(none.recordings.size(), 0);
+    QCOMPARE(none.shotsBytes, 0);
+    QCOMPARE(none.recordingsBytes, 0);
+    QCOMPARE(none.totalBytes(), 100);
+
+    // Pictures on, recordings off
+    const FilteredPc picsOnly = TimeFilter::filterPc(listing, defaultSources, window, true, true, false);
+    QCOMPARE(picsOnly.logs.size(), 1);
+    QCOMPARE(picsOnly.screenshots.size(), 2);
+    QCOMPARE(picsOnly.shotsBytes, 1200);
+    QCOMPARE(picsOnly.recordings.size(), 0);
+    QCOMPARE(picsOnly.recordingsBytes, 0);
+    QCOMPARE(picsOnly.totalBytes(), 1300);
+
+    // Pictures off, recordings on
+    const FilteredPc recsOnly = TimeFilter::filterPc(listing, defaultSources, window, true, false, true);
+    QCOMPARE(recsOnly.logs.size(), 1);
+    QCOMPARE(recsOnly.screenshots.size(), 0);
+    QCOMPARE(recsOnly.shotsBytes, 0);
+    QCOMPARE(recsOnly.recordings.size(), 2);
+    QCOMPARE(recsOnly.recordingsBytes, 6000);
+    QCOMPARE(recsOnly.totalBytes(), 6100);
+
+    // Both on
+    const FilteredPc both = TimeFilter::filterPc(listing, defaultSources, window, true, true, true);
+    QCOMPARE(both.logs.size(), 1);
+    QCOMPARE(both.screenshots.size(), 2);
+    QCOMPARE(both.recordings.size(), 2);
+    QCOMPARE(both.totalBytes(), 7300);
 }
 
 void TestCoreRemote::spaceEstimatorExactAndMarginBoundary() {

@@ -105,6 +105,12 @@ signals:
     void warningsChanged();
 
 private:
+    enum class TransferStage {
+        Logs = 0,
+        Screenshots,
+        Recordings
+    };
+
     struct InternalJob {
         TransferJobSpec spec;
         JobStatus status;
@@ -114,6 +120,8 @@ private:
         bool diskFullDetected = false;
         qint64 logsProgressBytes = 0;
         qint64 shotsProgressBytes = 0;
+        qint64 shotsCompletedBytes = 0;
+        qint64 recordingsProgressBytes = 0;
         QVector<LogSourceConfig> resolvedLogSources;
         int logsSubStageIndex = 0;
         qint64 logsCompletedBytes = 0;
@@ -124,16 +132,22 @@ private:
     void scheduleNext();
     void startJob(int index);
     void startNextLogsSubStage(int index);
-    void startStage(int index, bool isLogs, int logsSourceIndex, const QVector<FileEntry> &entries);
+    void advanceAfterLogs(int index);
+    void advanceAfterScreenshots(int index);
+    void startStage(int index,
+                    TransferStage stage,
+                    int logsSourceIndex,
+                    const QVector<FileEntry> &entries);
     void appendStderrChunk(int index, const QString &chunk);
     void handleProcessOutput(int index, QProcess *proc);
-    void handleProcessFinished(int index, QProcess *proc, bool isLogs,
+    void handleProcessFinished(int index, QProcess *proc, TransferStage stage,
                                int exitCode, bool normalExit);
-    void handleProcessFailedToStart(int index, QProcess *proc, bool isLogs);
+    void handleProcessFailedToStart(int index, QProcess *proc, TransferStage stage);
     void verifyJob(int index);
     void finishVerifyJob(quint64 generation, int index,
                          int logsCount, qint64 logsBytes,
-                         int shotsCount, qint64 shotsBytes);
+                         int shotsCount, qint64 shotsBytes,
+                         int recordingsCount, qint64 recordingsBytes);
     void failJob(int index, const QString &message, const QString &technicalDetail);
     void finalizeCancel();
     void checkSessionFinished();

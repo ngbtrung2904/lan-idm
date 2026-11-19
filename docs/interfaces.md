@@ -30,7 +30,8 @@ enum class JobState {
     DoneWithWarnings,
     Failed,
     Cancelled,
-    Skipped
+    Skipped,
+    CopyingRecordings = 9
 };
 
 enum class TimestampSource {
@@ -50,11 +51,14 @@ struct PcConfig {
     QString host;
     int port = 22;
     QVector<LogSourceConfig> logSources;
+    bool supportsPictures = true;
+    bool supportsRecordings = true;
 };
 
 struct PathsConfig {
     QString logs = QStringLiteral(".app");
-    QString screenshots = QStringLiteral("screenshot");
+    QString screenshots = QStringLiteral("Pictures/lightshot");
+    QString recordings = QStringLiteral("recordings");
 };
 
 struct LogsConfig {
@@ -82,6 +86,7 @@ struct PcListing {
     QString pcId;
     QVector<FileEntry> logs;
     QVector<FileEntry> screenshots;
+    QVector<FileEntry> recordings;
 };
 
 struct TimeWindow {
@@ -96,9 +101,11 @@ struct FilteredPc {
     QString pcId;
     QVector<FileEntry> logs;
     QVector<FileEntry> screenshots;
+    QVector<FileEntry> recordings;
     qint64 logsBytes = 0;
     qint64 shotsBytes = 0;
-    qint64 totalBytes() const { return logsBytes + shotsBytes; }
+    qint64 recordingsBytes = 0;
+    qint64 totalBytes() const { return logsBytes + shotsBytes + recordingsBytes; }
 };
 
 struct UsbDrive {
@@ -127,8 +134,12 @@ struct PcTransferResult {
     int shotsFilesPlanned = 0;
     int shotsFilesCopied = 0;
     qint64 shotsBytesCopied = 0;
+    int recordingsFilesPlanned = 0;
+    int recordingsFilesCopied = 0;
+    qint64 recordingsBytesCopied = 0;
     int logsRsyncExitCode = -1;
     int shotsRsyncExitCode = -1;
+    int recordingsRsyncExitCode = -1;
     QStringList errors;
 };
 
@@ -157,7 +168,7 @@ Properties:
 - `QString operatorId` (READ, NOTIFY `operatorIdChanged`)
 - `int throttleSeconds` (READ, NOTIFY `throttleSecondsChanged`) — >0 during 30 s lockout after 5 consecutive failures
 - `QString logsDisplayPath` (READ, CONSTANT) — e.g. `/home/user/.app` (derived from `config.sshUser` + `config.paths.logs`)
-- `QString screenshotsDisplayPath` (READ, CONSTANT) — e.g. `/home/user/screenshot`
+- `QString screenshotsDisplayPath` (READ, CONSTANT) — e.g. `/home/user/Pictures/lightshot`
 
 Invokables:
 - `Q_INVOKABLE void unlock(const QString &operatorId, const QString &passphrase)`
@@ -187,6 +198,10 @@ Models (`QAbstractListModel*`):
    - `logsCount` (int)
    - `shotsBytes` (qint64)
    - `shotsCount` (int)
+   - `recordingsBytes` (qint64)
+   - `recordingsCount` (int)
+   - `supportsPictures` (bool)
+   - `supportsRecordings` (bool)
    - `totalBytes` (qint64)
    - `selected` (bool)
    - `selectable` (bool — true only when `state == PcState::Online`)
@@ -217,6 +232,8 @@ Properties:
 - `bool fits` (READ, NOTIFY `estimateChanged`)
 - `int fittingPcCount` (READ, NOTIFY `estimateChanged`)
 - `QString destinationPreview` (READ, NOTIFY `drivesChanged`) — e.g. `/media/usb/collect_<timestamp>/` or `not set`
+- `bool includePictures` (READ, WRITE, NOTIFY `mediaOptionsChanged`) — default `true`
+- `bool includeRecordings` (READ, WRITE, NOTIFY `mediaOptionsChanged`) — default `false`
 - `bool canStart` (READ, NOTIFY `canStartChanged`)
 - `bool busy` (READ, NOTIFY `busyChanged`)
 
@@ -233,6 +250,7 @@ Signals:
 - `windowChanged()`
 - `selectionChanged()`
 - `drivesChanged()`
+- `mediaOptionsChanged()`
 - `estimateChanged()`
 - `canStartChanged()`
 - `busyChanged()`
@@ -251,7 +269,7 @@ Models (`QAbstractListModel*`):
    - `id` (QString)
    - `host` (QString)
    - `stage` (int, `dc::JobState`)
-   - `stageText` (QString, e.g. `"Done"`, `"Copying screenshots"`, `"Copying logs"`, `"Verifying"`, `"Queued"`, `"Skipped"`, `"Failed"`, `"Done with warnings"`, `"Cancelled"`)
+   - `stageText` (QString, e.g. `"Done"`, `"Copying screenshots"`, `"Copying recordings"`, `"Copying logs"`, `"Verifying"`, `"Queued"`, `"Skipped"`, `"Failed"`, `"Done with warnings"`, `"Cancelled"`)
    - `currentFile` (QString)
    - `rate` (double, bytes/sec)
    - `percent` (int, 0..100)

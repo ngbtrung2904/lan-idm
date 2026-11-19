@@ -40,14 +40,18 @@ QVariant StubPcModel::data(const QModelIndex &index, int role) const {
     case StateRole:         return static_cast<int>(it.state);
     case StateTextRole:     return pcStateText(it.state);
     case StatusMessageRole: return pcStateMessage(it.state);
-    case LogsBytesRole:     return it.logsBytes;
-    case LogsCountRole:     return it.logsCount;
-    case ShotsBytesRole:    return it.shotsBytes;
-    case ShotsCountRole:    return it.shotsCount;
-    case TotalBytesRole:    return it.totalBytes();
-    case SelectedRole:      return it.selected;
-    case SelectableRole:    return it.selectable();
-    default:                return {};
+    case LogsBytesRole:          return it.logsBytes;
+    case LogsCountRole:          return it.logsCount;
+    case ShotsBytesRole:         return it.shotsBytes;
+    case ShotsCountRole:         return it.shotsCount;
+    case RecordingsBytesRole:    return it.recordingsBytes;
+    case RecordingsCountRole:    return it.recordingsCount;
+    case SupportsPicturesRole:   return it.supportsPictures;
+    case SupportsRecordingsRole: return it.supportsRecordings;
+    case TotalBytesRole:         return it.totalBytes();
+    case SelectedRole:           return it.selected;
+    case SelectableRole:         return it.selectable();
+    default:                     return {};
     }
 }
 
@@ -62,6 +66,10 @@ QHash<int, QByteArray> StubPcModel::roleNames() const {
         {LogsCountRole, "logsCount"},
         {ShotsBytesRole, "shotsBytes"},
         {ShotsCountRole, "shotsCount"},
+        {RecordingsBytesRole, "recordingsBytes"},
+        {RecordingsCountRole, "recordingsCount"},
+        {SupportsPicturesRole, "supportsPictures"},
+        {SupportsRecordingsRole, "supportsRecordings"},
         {TotalBytesRole, "totalBytes"},
         {SelectedRole, "selected"},
         {SelectableRole, "selectable"}
@@ -315,15 +323,17 @@ StubSourcesController::StubSourcesController(QObject *parent)
 }
 
 void StubSourcesController::populateMockData() {
-    QVector<StubPcModel::Item> pcs = {
-        {QStringLiteral("pc01"), QStringLiteral("192.168.10.11"), PcState::Online,  38 * kMb, 42, 4710 * kMb, 1208, true},
-        {QStringLiteral("pc02"), QStringLiteral("192.168.10.12"), PcState::Online,  41 * kMb, 45, 4660 * kMb, 1196, true},
-        {QStringLiteral("pc03"), QStringLiteral("192.168.10.13"), PcState::Online,  36 * kMb, 40, 4820 * kMb, 1231, true},
-        {QStringLiteral("pc04"), QStringLiteral("192.168.10.14"), PcState::Online,  44 * kMb, 47, 4590 * kMb, 1178, true},
-        {QStringLiteral("pc05"), QStringLiteral("192.168.10.15"), PcState::Offline, 0,        0,  0,          0,    false},
-        {QStringLiteral("pc06"), QStringLiteral("192.168.10.16"), PcState::Online,  39 * kMb, 43, 4740 * kMb, 1215, true}
+    mBasePcs = {
+        {QStringLiteral("pc01"), QStringLiteral("192.168.10.11"), PcState::Online,  38 * kMb, 42, 4710 * kMb, 1208, 1450 * kMb, 14, true,  true,  true},
+        {QStringLiteral("pc02"), QStringLiteral("192.168.10.12"), PcState::Online,  41 * kMb, 45, 4660 * kMb, 1196, 1320 * kMb, 12, true,  true,  true},
+        {QStringLiteral("pc03"), QStringLiteral("192.168.10.13"), PcState::Online,  36 * kMb, 40, 4820 * kMb, 1231, 1680 * kMb, 16, true,  true,  true},
+        {QStringLiteral("pc04"), QStringLiteral("192.168.10.14"), PcState::Online,  44 * kMb, 47, 4590 * kMb, 1178, 1210 * kMb, 11, true,  true,  true},
+        {QStringLiteral("pc05"), QStringLiteral("192.168.10.15"), PcState::Offline, 0,        0,  0,          0,    0,          0,  true,  true,  false},
+        {QStringLiteral("pc06"), QStringLiteral("192.168.10.16"), PcState::Online,  39 * kMb, 43, 4740 * kMb, 1215, 1540 * kMb, 15, true,  true,  true},
+        {QStringLiteral("pc07"), QStringLiteral("192.168.10.17"), PcState::Online,  52 * kMb, 64, 0,          0,    0,          0,  false, false, true}
     };
-    mPcModel.setItems(pcs);
+    mPcModel.setItems(mBasePcs);
+    applyMediaOptionsToModel();
 
     QVector<StubDriveModel::Item> drives = {
         {{QStringLiteral("/dev/sdb1"), QStringLiteral("Kingston 64 GB"), QStringLiteral("/media/usb"),
@@ -333,6 +343,43 @@ void StubSourcesController::populateMockData() {
     };
     mDriveModel.setItems(drives);
     mSelectedDriveIndex = 0;
+}
+
+void StubSourcesController::applyMediaOptionsToModel() {
+    QVector<StubPcModel::Item> &items = mPcModel.items();
+    const int count = std::min(items.size(), mBasePcs.size());
+    for (int i = 0; i < count; ++i) {
+        const StubPcModel::Item &base = mBasePcs.at(i);
+        const bool picOn = mIncludePictures && base.supportsPictures;
+        const bool recOn = mIncludeRecordings && base.supportsRecordings;
+        items[i].shotsBytes = picOn ? base.shotsBytes : 0;
+        items[i].shotsCount = picOn ? base.shotsCount : 0;
+        items[i].recordingsBytes = recOn ? base.recordingsBytes : 0;
+        items[i].recordingsCount = recOn ? base.recordingsCount : 0;
+    }
+    mPcModel.notifyAllChanged();
+}
+
+void StubSourcesController::setIncludePictures(bool include) {
+    if (mIncludePictures == include) {
+        return;
+    }
+    mIncludePictures = include;
+    applyMediaOptionsToModel();
+    emit mediaOptionsChanged();
+    emit selectionChanged();
+    recalculateEstimate();
+}
+
+void StubSourcesController::setIncludeRecordings(bool include) {
+    if (mIncludeRecordings == include) {
+        return;
+    }
+    mIncludeRecordings = include;
+    applyMediaOptionsToModel();
+    emit mediaOptionsChanged();
+    emit selectionChanged();
+    recalculateEstimate();
 }
 
 void StubSourcesController::setWindowStart(const QDateTime &dt) {
@@ -634,6 +681,7 @@ void StubTransferController::cancel() {
     for (int i = 0; i < items.size(); ++i) {
         if (items[i].stage == JobState::CopyingLogs
             || items[i].stage == JobState::CopyingScreenshots
+            || items[i].stage == JobState::CopyingRecordings
             || items[i].stage == JobState::Verifying
             || items[i].stage == JobState::Queued) {
             items[i].stage = JobState::Cancelled;
@@ -693,7 +741,9 @@ void StubTransferController::onTick() {
 
     for (int i = 0; i < items.size(); ++i) {
         StubJobModel::Item &job = items[i];
-        if (job.stage == JobState::CopyingLogs || job.stage == JobState::CopyingScreenshots) {
+        if (job.stage == JobState::CopyingLogs
+            || job.stage == JobState::CopyingScreenshots
+            || job.stage == JobState::CopyingRecordings) {
             ++activeCount;
             // Advance ~220 MB per 250 ms tick in demo mode so full run takes ~12-15 seconds
             const qint64 step = (i % 2 == 0) ? (240 * kMb) : (175 * kMb);

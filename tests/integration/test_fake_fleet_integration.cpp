@@ -165,7 +165,7 @@ QHash<QString, PcListing> listSelectedPcs(const AppConfig &config,
             continue;
         }
         lister.listPc(pc, config.sshUser, resolveLogSources(pc, config.paths), config.paths.screenshots,
-                      makeSshParams(config, agentSocket, pc.port));
+                      config.paths.recordings, makeSshParams(config, agentSocket, pc.port));
     }
     if (completed < expected) {
         loop.exec();
@@ -388,7 +388,7 @@ void TestFakeFleetIntegration::testFullRunAndManifestVerification() {
         } else {
             const FilteredPc filtered = TimeFilter::filterPc(
                 listings.value(pc.id), resolveLogSources(pc, mConfig.paths), window,
-                mConfig.logs.includeModifiedAfterEnd);
+                mConfig.logs.includeModifiedAfterEnd, pc.supportsPictures, false);
             QVERIFY2(!filtered.logs.isEmpty(), qPrintable(pc.id));
             QVERIFY2(!filtered.screenshots.isEmpty(), qPrintable(pc.id));
             filteredByPc.insert(pc.id, filtered);
@@ -528,7 +528,8 @@ void TestFakeFleetIntegration::testCancelMidRun() {
         TransferJobSpec spec;
         spec.pc = *pc;
         spec.files = TimeFilter::filterPc(listings.value(id), resolveLogSources(*pc, mConfig.paths),
-                                          window, mConfig.logs.includeModifiedAfterEnd);
+                                          window, mConfig.logs.includeModifiedAfterEnd,
+                                          pc->supportsPictures, false);
         specs.append(spec);
     }
 
@@ -583,7 +584,8 @@ void TestFakeFleetIntegration::testUsbRemovedAndRetry() {
         TransferJobSpec spec;
         spec.pc = *pc;
         spec.files = TimeFilter::filterPc(listings.value(id), resolveLogSources(*pc, mConfig.paths),
-                                          window, mConfig.logs.includeModifiedAfterEnd);
+                                          window, mConfig.logs.includeModifiedAfterEnd,
+                                          pc->supportsPictures, false);
         filteredByPc.insert(id, spec.files);
         specs.append(spec);
     }
@@ -640,7 +642,8 @@ void TestFakeFleetIntegration::testHostDropAndRetryPc() {
         TransferJobSpec spec;
         spec.pc = *pc;
         spec.files = TimeFilter::filterPc(listings.value(id), resolveLogSources(*pc, mConfig.paths),
-                                          window, mConfig.logs.includeModifiedAfterEnd);
+                                          window, mConfig.logs.includeModifiedAfterEnd,
+                                          pc->supportsPictures, false);
         filteredByPc.insert(id, spec.files);
         specs.append(spec);
     }
@@ -762,7 +765,7 @@ void TestFakeFleetIntegration::testSoak300kEntries() {
         totalParsed += listing.logs.size() + listing.screenshots.size();
 
         const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
-        const FilteredPc filtered = TimeFilter::filterPc(listing, defaultSources, window, true);
+        const FilteredPc filtered = TimeFilter::filterPc(listing, defaultSources, window, true, true, false);
         totalFilteredLogs += filtered.logs.size();
         totalFilteredShots += filtered.screenshots.size();
         selectedPcBytes.append(filtered.totalBytes());

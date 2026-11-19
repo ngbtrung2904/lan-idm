@@ -50,8 +50,12 @@ void TestTransferEngine::manifestWriteAtomicAndStructure() {
     pc1.shotsFilesPlanned = 5;
     pc1.shotsFilesCopied = 5;
     pc1.shotsBytesCopied = 2048000;
+    pc1.recordingsFilesPlanned = 2;
+    pc1.recordingsFilesCopied = 2;
+    pc1.recordingsBytesCopied = 8192000;
     pc1.logsRsyncExitCode = 24;
     pc1.shotsRsyncExitCode = 0;
+    pc1.recordingsRsyncExitCode = 0;
     pc1.errors = {QStringLiteral("pc01: partial transfer of logs (rsync exit 24)")};
     data.pcs.append(pc1);
 
@@ -84,8 +88,12 @@ void TestTransferEngine::manifestWriteAtomicAndStructure() {
     QCOMPARE(pcObj.value(QStringLiteral("shotsFilesPlanned")).toInt(), 5);
     QCOMPARE(pcObj.value(QStringLiteral("shotsFilesCopied")).toInt(), 5);
     QCOMPARE(static_cast<qint64>(pcObj.value(QStringLiteral("shotsBytesCopied")).toDouble()), qint64(2048000));
+    QCOMPARE(pcObj.value(QStringLiteral("recordingsFilesPlanned")).toInt(), 2);
+    QCOMPARE(pcObj.value(QStringLiteral("recordingsFilesCopied")).toInt(), 2);
+    QCOMPARE(static_cast<qint64>(pcObj.value(QStringLiteral("recordingsBytesCopied")).toDouble()), qint64(8192000));
     QCOMPARE(pcObj.value(QStringLiteral("logsRsyncExitCode")).toInt(), 24);
     QCOMPARE(pcObj.value(QStringLiteral("shotsRsyncExitCode")).toInt(), 0);
+    QCOMPARE(pcObj.value(QStringLiteral("recordingsRsyncExitCode")).toInt(), 0);
     QCOMPARE(pcObj.value(QStringLiteral("errors")).toArray().size(), 1);
 }
 

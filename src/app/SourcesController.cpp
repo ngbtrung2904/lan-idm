@@ -42,14 +42,18 @@ QVariant PcListModel::data(const QModelIndex &index, int role) const {
     case StateTextRole:     return pcStateText(it.state);
     case StatusMessageRole:
         return it.statusDetail.isEmpty() ? pcStateMessage(it.state) : it.statusDetail;
-    case LogsBytesRole:     return it.logsBytes;
-    case LogsCountRole:     return it.logsCount;
-    case ShotsBytesRole:    return it.shotsBytes;
-    case ShotsCountRole:    return it.shotsCount;
-    case TotalBytesRole:    return it.totalBytes();
-    case SelectedRole:      return it.selected;
-    case SelectableRole:    return it.selectable();
-    default:                return {};
+    case LogsBytesRole:          return it.logsBytes;
+    case LogsCountRole:          return it.logsCount;
+    case ShotsBytesRole:         return it.shotsBytes;
+    case ShotsCountRole:         return it.shotsCount;
+    case RecordingsBytesRole:    return it.recordingsBytes;
+    case RecordingsCountRole:    return it.recordingsCount;
+    case SupportsPicturesRole:   return it.supportsPictures;
+    case SupportsRecordingsRole: return it.supportsRecordings;
+    case TotalBytesRole:         return it.totalBytes();
+    case SelectedRole:           return it.selected;
+    case SelectableRole:         return it.selectable();
+    default:                     return {};
     }
 }
 
@@ -64,6 +68,10 @@ QHash<int, QByteArray> PcListModel::roleNames() const {
         {LogsCountRole, "logsCount"},
         {ShotsBytesRole, "shotsBytes"},
         {ShotsCountRole, "shotsCount"},
+        {RecordingsBytesRole, "recordingsBytes"},
+        {RecordingsCountRole, "recordingsCount"},
+        {SupportsPicturesRole, "supportsPictures"},
+        {SupportsRecordingsRole, "supportsRecordings"},
         {TotalBytesRole, "totalBytes"},
         {SelectedRole, "selected"},
         {SelectableRole, "selectable"}
@@ -82,6 +90,10 @@ void PcListModel::initializePcs(const QVector<PcConfig> &pcs) {
             mItems[i].logsCount = 0;
             mItems[i].shotsBytes = 0;
             mItems[i].shotsCount = 0;
+            mItems[i].recordingsBytes = 0;
+            mItems[i].recordingsCount = 0;
+            mItems[i].supportsPictures = pcs[i].supportsPictures;
+            mItems[i].supportsRecordings = pcs[i].supportsRecordings;
             mItems[i].selected = false;
         }
         notifyAllChanged();
@@ -97,6 +109,8 @@ void PcListModel::initializePcs(const QVector<PcConfig> &pcs) {
         item.host = pc.host;
         item.port = pc.port;
         item.state = PcState::Unknown;
+        item.supportsPictures = pc.supportsPictures;
+        item.supportsRecordings = pc.supportsRecordings;
         mItems.push_back(item);
     }
     endResetModel();
@@ -376,6 +390,28 @@ QString SourcesController::destinationPreview() const {
     return mount + QStringLiteral("/collect_<timestamp>/");
 }
 
+void SourcesController::setIncludePictures(bool include) {
+    if (mIncludePictures == include) {
+        return;
+    }
+    mIncludePictures = include;
+    reapplyFilterAll();
+    emit mediaOptionsChanged();
+    emit selectionChanged();
+    recalculateEstimate();
+}
+
+void SourcesController::setIncludeRecordings(bool include) {
+    if (mIncludeRecordings == include) {
+        return;
+    }
+    mIncludeRecordings = include;
+    reapplyFilterAll();
+    emit mediaOptionsChanged();
+    emit selectionChanged();
+    recalculateEstimate();
+}
+
 bool SourcesController::canStart() const {
     return windowValid()
            && selectedCount() > 0
@@ -407,6 +443,8 @@ void SourcesController::rescanPcs() {
         items[i].logsCount = 0;
         items[i].shotsBytes = 0;
         items[i].shotsCount = 0;
+        items[i].recordingsBytes = 0;
+        items[i].recordingsCount = 0;
         items[i].selected = false;
         mPcModel.notifyRowChanged(i);
         mProbeQueue.push_back(i);
@@ -592,7 +630,8 @@ void SourcesController::startCopy() {
         if (i < mConfig.pcs.size() && mConfig.pcs[i].id == pcItem.id) {
             spec.pc = mConfig.pcs[i];
         } else {
-            spec.pc = PcConfig{pcItem.id, pcItem.host, pcItem.port, {}};
+            spec.pc = PcConfig{pcItem.id, pcItem.host, pcItem.port, {},
+                               pcItem.supportsPictures, pcItem.supportsRecordings};
         }
 
         if (pcItem.selectable() && pcItem.selected) {
@@ -665,6 +704,7 @@ void SourcesController::onProbeFinished(const QString &pcId, dc::PcState state, 
                                     mConfig.sshUser,
                                     resolveLogSources(pc, mConfig.paths),
                                     mConfig.paths.screenshots,
+                                    mConfig.paths.recordings,
                                     buildSshParams(pc.port));
             }
         } else {
@@ -673,6 +713,8 @@ void SourcesController::onProbeFinished(const QString &pcId, dc::PcState state, 
             item.logsCount = 0;
             item.shotsBytes = 0;
             item.shotsCount = 0;
+            item.recordingsBytes = 0;
+            item.recordingsCount = 0;
             item.statusDetail.clear();
             mPcModel.notifyRowChanged(row);
         }
@@ -716,6 +758,8 @@ void SourcesController::onListingFailed(const QString &pcId, const QString &erro
         item.logsCount = 0;
         item.shotsBytes = 0;
         item.shotsCount = 0;
+        item.recordingsBytes = 0;
+        item.recordingsCount = 0;
         item.statusDetail = QStringLiteral("Could not list files on this PC. Check the PC and click Rescan PCs.");
         mPcModel.notifyRowChanged(row);
     }
@@ -744,13 +788,17 @@ void SourcesController::applyFilterToRow(int row) {
     const FilteredPc filtered = TimeFilter::filterPc(it.value(),
                                                      logSources,
                                                      timeWindow(),
-                                                     mConfig.logs.includeModifiedAfterEnd);
+                                                     mConfig.logs.includeModifiedAfterEnd,
+                                                     mIncludePictures && item.supportsPictures,
+                                                     mIncludeRecordings && item.supportsRecordings);
     mFiltered.insert(item.id, filtered);
 
     item.logsBytes = filtered.logsBytes;
     item.logsCount = filtered.logs.size();
     item.shotsBytes = filtered.shotsBytes;
     item.shotsCount = filtered.screenshots.size();
+    item.recordingsBytes = filtered.recordingsBytes;
+    item.recordingsCount = filtered.recordings.size();
     mPcModel.notifyRowChanged(row);
 }
 

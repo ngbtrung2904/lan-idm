@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0] - 2026-11-19
+
+### Features
+- **Optional Pictures (`Pictures/lightshot`) & Screen Recordings (`recordings`) Support**:
+  - `src/core/Types.h`: Appended `JobState::CopyingRecordings = 9`, updated `PathsConfig` defaults (`screenshots = "Pictures/lightshot"`, `recordings = "recordings"`), added `PcConfig::supportsPictures`/`supportsRecordings`, and extended `PcListing`, `FilteredPc`, and `PcTransferResult` for recordings.
+  - `src/core/ConfigStore.cpp`: Added parsing and validation for optional `paths.recordings` and per-PC `supportsPictures`/`supportsRecordings` booleans.
+  - `src/core/TimeFilter.{h,cpp}`: Added `TimeFilter::extractFilenameDateTime()` for Lightshot (`yyyy-MM-dd_HH-mm-ss`) and screen recording (`yyyyMMdd_HHmmss`) basenames, and extended `TimeFilter::filterPc()` with `includePictures` and `includeRecordings` toggles.
+  - `src/core/RsyncLister.{h,cpp}`: Extended `listPc()` to conditionally list screenshots and recordings based on `pc.supportsPictures`/`pc.supportsRecordings`, treating missing optional media directories (rsync exit 23) as empty lists.
+  - `src/core/TransferEngine.{h,cpp}` & `src/core/Manifest.cpp`: Added `CopyingRecordings` transfer stage, monotonic byte tracking across logs/screenshots/recordings, recordings directory verification and `.partial` cleanup, and recordings fields in `manifest.json`.
+  - `src/app/SourcesController.{h,cpp}` & `src/app/stubs/StubControllers.{h,cpp}`: Added `includePictures` (default `true`) and `includeRecordings` (default `false`) properties with instant zero-SSH re-filtering, exposed `recordingsBytes`/`recordingsCount`/`supportsPictures`/`supportsRecordings` model roles, and added `pc07` (media disabled) and sample recordings in `--demo` mode.
+  - `config.example.json`, `docs/interfaces.md`: Updated default media paths, disabled pictures/recordings on `pc07`, and documented updated core and controller contracts.
+
 ## [0.2.0] - 2026-11-19
 
 ### Features

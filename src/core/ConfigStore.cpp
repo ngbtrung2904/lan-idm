@@ -185,6 +185,14 @@ bool ConfigStore::parseJson(const QByteArray &jsonData, AppConfig *outConfig, QS
             }
             cfg.paths.screenshots = sv.toString().trimmed();
         }
+        if (po.contains(QStringLiteral("recordings"))) {
+            const QJsonValue rv = po.value(QStringLiteral("recordings"));
+            if (!rv.isString() || rv.toString().trimmed().isEmpty()) {
+                setError(error, QStringLiteral("Missing or invalid key: paths.recordings"));
+                return false;
+            }
+            cfg.paths.recordings = rv.toString().trimmed();
+        }
     }
 
     // logs (optional object)
@@ -257,6 +265,24 @@ bool ConfigStore::parseJson(const QByteArray &jsonData, AppConfig *outConfig, QS
                 return false;
             }
             pc.port = port;
+        }
+
+        if (po.contains(QStringLiteral("supportsPictures"))) {
+            const QJsonValue spVal = po.value(QStringLiteral("supportsPictures"));
+            if (!spVal.isBool()) {
+                setError(error, QStringLiteral("Missing or invalid key: pcs[%1].supportsPictures").arg(i));
+                return false;
+            }
+            pc.supportsPictures = spVal.toBool();
+        }
+
+        if (po.contains(QStringLiteral("supportsRecordings"))) {
+            const QJsonValue srVal = po.value(QStringLiteral("supportsRecordings"));
+            if (!srVal.isBool()) {
+                setError(error, QStringLiteral("Missing or invalid key: pcs[%1].supportsRecordings").arg(i));
+                return false;
+            }
+            pc.supportsRecordings = srVal.toBool();
         }
 
         if (po.contains(QStringLiteral("logSources"))) {

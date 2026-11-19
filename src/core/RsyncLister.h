@@ -30,6 +30,7 @@ public:
                 const QString &sshUser,
                 const QVector<LogSourceConfig> &logSources,
                 const QString &shotsRelDir,
+                const QString &recordingsRelDir,
                 const SshParams &sshParams);
     void cancel();
     bool isRunning() const;
@@ -43,6 +44,7 @@ private:
         PcListing listing;
         std::vector<std::unique_ptr<QProcess>> logProcs;
         std::unique_ptr<QProcess> shotsProc;
+        std::unique_ptr<QProcess> recordingsProc;
         int pendingCount = 0;
     };
 

@@ -30,6 +30,7 @@ QString Manifest::jobStateToString(JobState state) {
     case JobState::Queued:             return QStringLiteral("queued");
     case JobState::CopyingLogs:        return QStringLiteral("copying_logs");
     case JobState::CopyingScreenshots: return QStringLiteral("copying_screenshots");
+    case JobState::CopyingRecordings:  return QStringLiteral("copying_recordings");
     case JobState::Verifying:          return QStringLiteral("verifying");
     case JobState::Done:               return QStringLiteral("done");
     case JobState::DoneWithWarnings:   return QStringLiteral("done_with_warnings");
@@ -62,8 +63,12 @@ QJsonObject Manifest::toJson(const ManifestData &data) {
         pcObj.insert(QStringLiteral("shotsFilesPlanned"), pc.shotsFilesPlanned);
         pcObj.insert(QStringLiteral("shotsFilesCopied"), pc.shotsFilesCopied);
         pcObj.insert(QStringLiteral("shotsBytesCopied"), static_cast<double>(pc.shotsBytesCopied));
+        pcObj.insert(QStringLiteral("recordingsFilesPlanned"), pc.recordingsFilesPlanned);
+        pcObj.insert(QStringLiteral("recordingsFilesCopied"), pc.recordingsFilesCopied);
+        pcObj.insert(QStringLiteral("recordingsBytesCopied"), static_cast<double>(pc.recordingsBytesCopied));
         pcObj.insert(QStringLiteral("logsRsyncExitCode"), pc.logsRsyncExitCode);
         pcObj.insert(QStringLiteral("shotsRsyncExitCode"), pc.shotsRsyncExitCode);
+        pcObj.insert(QStringLiteral("recordingsRsyncExitCode"), pc.recordingsRsyncExitCode);
 
         QJsonArray errArray;
         for (const QString &err : pc.errors) {
