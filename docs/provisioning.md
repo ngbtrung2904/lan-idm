@@ -1,31 +1,45 @@
 # Data Collector — Provisioning Guide
 
-This guide explains how to prepare the Ubuntu desktop operator station and the 6 headless Ubuntu PCs (`pc01`–`pc06`) for read-only log and screenshot collection over SSH + `rsync`.
+This guide explains what must be installed and configured on the Ubuntu desktop operator station and the **7 headless Ubuntu PCs (`pc01`–`pc07`)** for read-only log, picture, and screen recording collection over SSH + `rsync`.
 
-No custom daemon or service runs on the PCs. Access is enforced solely by OpenSSH key authentication and `rrsync -ro`.
+No custom daemon or service runs on the remote PCs. Access is enforced solely by OpenSSH key authentication and `rrsync -ro`.
+
+---
+
+## 0. Summary: What Must Be Installed / Updated on Remote PCs
+
+| Item | Required on Remote PCs? | Details |
+|---|---|---|
+| Custom collector agent/service | **No** | Nothing custom is installed on the PCs. |
+| `openssh-server` (OpenSSH 8+) | **Yes** | Required for SSH key transport (`scripts/provision-pc.sh` installs it). |
+| `rsync` 3.1+ & `rrsync` | **Yes** | Required for read-only listing and transfer (`scripts/provision-pc.sh` installs `rsync` and ensures `/usr/bin/rrsync` or `/usr/local/bin/rrsync` exists). |
+| `systemd-timesyncd` (NTP) & timezone | **Yes** | Desktop and all 7 PCs must share the exact same timezone with NTP active (Section 2). |
+| Restricted `authorized_keys` line | **Yes** | `command="/usr/bin/rrsync -ro /home/<user>",restrict <pubkey>` in `/home/<user>/.ssh/authorized_keys` (handles all paths under `/home/<user>`, including `pc07`'s `.app/aesardp/syslog` and `app/aesardp/metadata`, and `pc01`–`pc06`'s `Pictures/lightshot` and `recordings`). |
+| Disable SSH password auth | **Yes** (after testing) | `/etc/ssh/sshd_config.d/99-datacollector.conf` (`PasswordAuthentication no`). |
+| Extra changes for `pc07` or media folders | **No** | Because `rrsync -ro /home/<user>` covers the entire user home directory, **no special remote setup is needed** for `pc07` or for `Pictures/lightshot` / `recordings`. Only the desktop `config.json` differs for `pc07`. |
 
 ---
 
 ## 1. Prerequisites
 
-Ensure all 7 machines (1 desktop + 6 headless PCs) meet these requirements before provisioning:
+Ensure all 8 machines (1 desktop + 7 headless PCs) meet these requirements before provisioning:
 
-| Requirement | Desktop | Headless PCs (`pc01`–`pc06`) |
-|---|---|---|
-| OS | Ubuntu 22.04 LTS or 24.04 LTS | Ubuntu 22.04 LTS or 24.04 LTS |
-| Network | LAN reachability to all PCs on TCP port 22 | Static IP or reliable LAN DNS |
-| SSH | OpenSSH 8+ (`openssh-client`) | OpenSSH 8+ (`openssh-server`) |
-| rsync | `rsync` 3.1+ | `rsync` 3.1+ with `rrsync` |
-| Privileges | Operator user account | `sudo` access during initial setup |
-| Data paths | Writable USB mount under `/media` or `/run/media` | `/home/<user>/.app` (logs) and `/home/<user>/screenshot` (screenshots) |
+| Requirement | Desktop | Headless PCs (`pc01`–`pc06`) | Headless PC (`pc07`) |
+|---|---|---|---|
+| OS | Ubuntu 22.04 LTS or 24.04 LTS | Ubuntu 22.04 LTS or 24.04 LTS | Ubuntu 22.04 LTS or 24.04 LTS |
+| Network | LAN reachability to all PCs on TCP port 22 | Static IP or reliable LAN DNS | Static IP or reliable LAN DNS |
+| SSH | OpenSSH 8+ (`openssh-client`) | OpenSSH 8+ (`openssh-server`) | OpenSSH 8+ (`openssh-server`) |
+| rsync | `rsync` 3.1+ | `rsync` 3.1+ with `rrsync` | `rsync` 3.1+ with `rrsync` |
+| Privileges | Operator user account | `sudo` access during initial setup | `sudo` access during initial setup |
+| Data paths | Writable USB mount under `/media` or `/run/media` | `/home/<user>/.app` (logs), optional `/home/<user>/Pictures/lightshot` (pictures), optional `/home/<user>/recordings` (screen recordings) | `/home/<user>/.app/aesardp/syslog` (syslog) and `/home/<user>/app/aesardp/metadata` (metadata: `cinfo`, `kinfo`, `minfo`) |
 
-> **Security note:** Never commit private keys, passphrases, or production hostnames/IPs to version control. The IP addresses below (`192.168.10.11`–`192.168.10.16`) are placeholders.
+> **Security note:** Never commit private keys, passphrases, or production hostnames/IPs to version control. The IP addresses below (`192.168.10.11`–`192.168.10.17`) are placeholders.
 
 ---
 
 ## 2. Timezone and NTP Synchronization Requirement
 
-> **CRITICAL:** The desktop and all 6 PCs **MUST** be configured with the **exact same IANA timezone** and have **NTP enabled** (`systemd-timesyncd`).
+> **CRITICAL:** The desktop and all 7 PCs **MUST** be configured with the **exact same IANA timezone** and have **NTP enabled** (`systemd-timesyncd`).
 
 ### Why this is mandatory
 
@@ -47,7 +61,7 @@ sudo timedatectl set-ntp true
 ```bash
 timedatectl status
 # Confirm:
-#   Time zone: Asia/Ho_Chi_Minh (+07, +0700)   <-- identical on all 7 machines
+#   Time zone: Asia/Ho_Chi_Minh (+07, +0700)   <-- identical on all 8 machines
 #   System clock synchronized: yes
 #   NTP service: active
 ```
@@ -73,7 +87,7 @@ Both scripts are idempotent and support `--dry-run`, which prints every command 
 ./scripts/setup-desktop.sh \
   --user user \
   --timezone Asia/Ho_Chi_Minh \
-  --hosts pc01:192.168.10.11,pc02:192.168.10.12,pc03:192.168.10.13,pc04:192.168.10.14,pc05:192.168.10.15,pc06:192.168.10.16 \
+  --hosts pc01:192.168.10.11,pc02:192.168.10.12,pc03:192.168.10.13,pc04:192.168.10.14,pc05:192.168.10.15,pc06:192.168.10.16,pc07:192.168.10.17 \
   --dry-run
 ```
 
@@ -86,12 +100,14 @@ For a **staged rollout** (recommended on first deployment), pass `--keep-passwor
   --user user \
   --timezone Asia/Ho_Chi_Minh \
   --keep-password-auth \
-  --hosts pc01:192.168.10.11,pc02:192.168.10.12,pc03:192.168.10.13,pc04:192.168.10.14,pc05:192.168.10.15,pc06:192.168.10.16
+  --hosts pc01:192.168.10.11,pc02:192.168.10.12,pc03:192.168.10.13,pc04:192.168.10.14,pc05:192.168.10.15,pc06:192.168.10.16,pc07:192.168.10.17
 ```
 
 When prompted:
 - **Key passphrase:** Choose a strong passphrase and share it only with authorized operators. Do **not** leave it blank.
 - **Host key fingerprints:** Compare each displayed `SHA256:...` fingerprint against the PC's local host key (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256`) before typing `y`.
+
+After `setup-desktop.sh` generates `~/.config/DataCollector/config.json`, update the `pc07` entry to match [config.example.json](../config.example.json) (`logSources` for `.app/aesardp/syslog` and `app/aesardp/metadata` with `"timestampSource": "filename"`, and `"supportsPictures": false, "supportsRecordings": false`), and verify `paths.screenshots` (`"Pictures/lightshot"`) and `paths.recordings` (`"recordings"`).
 
 Once you have verified collection works, re-run without `--keep-password-auth` to disable SSH password authentication on all PCs.
 
@@ -104,7 +120,7 @@ If you prefer to provision each PC directly (for example, via local console or a
    ./scripts/setup-desktop.sh \
      --user user \
      --skip-distribute \
-     --hosts pc01:192.168.10.11,pc02:192.168.10.12,pc03:192.168.10.13,pc04:192.168.10.14,pc05:192.168.10.15,pc06:192.168.10.16
+     --hosts pc01:192.168.10.11,pc02:192.168.10.12,pc03:192.168.10.13,pc04:192.168.10.14,pc05:192.168.10.15,pc06:192.168.10.16,pc07:192.168.10.17
    ```
    *(The final probe will report failures until the PCs are provisioned in step 2.)*
 
@@ -125,7 +141,7 @@ If you prefer to provision each PC directly (for example, via local console or a
      --disable-password-auth
    ```
 
-3. Re-run `setup-desktop.sh --skip-distribute` on the desktop to confirm all 6 read-only probes pass.
+3. Re-run `setup-desktop.sh --skip-distribute` on the desktop to confirm all 7 read-only probes pass.
 
 ### Script CLI Reference
 
