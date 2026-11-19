@@ -1,4 +1,5 @@
 #include "ConfigStore.h"
+#include "PathSanitizer.h"
 
 #include <QDir>
 #include <QFile>
@@ -256,6 +257,96 @@ bool ConfigStore::parseJson(const QByteArray &jsonData, AppConfig *outConfig, QS
                 return false;
             }
             pc.port = port;
+        }
+
+        if (po.contains(QStringLiteral("logSources"))) {
+            const QJsonValue lsVal = po.value(QStringLiteral("logSources"));
+            if (!lsVal.isArray()) {
+                setError(error, QStringLiteral("Missing or invalid key: pcs[%1].logSources").arg(i));
+                return false;
+            }
+            const QJsonArray lsArray = lsVal.toArray();
+            QSet<QString> seenSubdirs;
+            pc.logSources.reserve(lsArray.size());
+            for (int j = 0; j < lsArray.size(); ++j) {
+                if (!lsArray.at(j).isObject()) {
+                    setError(error, QStringLiteral("Missing or invalid key: pcs[%1].logSources[%2]")
+                                        .arg(i)
+                                        .arg(j));
+                    return false;
+                }
+                const QJsonObject lso = lsArray.at(j).toObject();
+                LogSourceConfig src;
+
+                const QJsonValue nameVal = lso.value(QStringLiteral("name"));
+                if (!nameVal.isString() || nameVal.toString().trimmed().isEmpty()) {
+                    setError(error, QStringLiteral("Missing or invalid key: pcs[%1].logSources[%2].name")
+                                        .arg(i)
+                                        .arg(j));
+                    return false;
+                }
+                src.name = nameVal.toString().trimmed();
+
+                const QJsonValue rpVal = lso.value(QStringLiteral("remotePath"));
+                const QString remotePath = rpVal.isString() ? rpVal.toString().trimmed() : QString();
+                if (remotePath.isEmpty() || !PathSanitizer::isSafeRelativePath(remotePath)) {
+                    setError(error, QStringLiteral("Missing or invalid key: pcs[%1].logSources[%2].remotePath")
+                                        .arg(i)
+                                        .arg(j));
+                    return false;
+                }
+                src.remotePath = remotePath;
+
+                if (lso.contains(QStringLiteral("destSubdir"))) {
+                    const QJsonValue dsVal = lso.value(QStringLiteral("destSubdir"));
+                    if (!dsVal.isString()) {
+                        setError(error, QStringLiteral("Missing or invalid key: pcs[%1].logSources[%2].destSubdir")
+                                            .arg(i)
+                                            .arg(j));
+                        return false;
+                    }
+                    const QString destSubdir = dsVal.toString().trimmed();
+                    if (!destSubdir.isEmpty()) {
+                        if (!PathSanitizer::isSafeRelativePath(destSubdir)) {
+                            setError(error, QStringLiteral("Missing or invalid key: pcs[%1].logSources[%2].destSubdir")
+                                                .arg(i)
+                                                .arg(j));
+                            return false;
+                        }
+                        if (seenSubdirs.contains(destSubdir)) {
+                            setError(error, QStringLiteral("Duplicate destSubdir in pcs[%1].logSources: %2")
+                                                .arg(i)
+                                                .arg(destSubdir));
+                            return false;
+                        }
+                        seenSubdirs.insert(destSubdir);
+                        src.destSubdir = destSubdir;
+                    }
+                }
+
+                if (lso.contains(QStringLiteral("timestampSource"))) {
+                    const QJsonValue tsVal = lso.value(QStringLiteral("timestampSource"));
+                    if (!tsVal.isString()) {
+                        setError(error, QStringLiteral("Missing or invalid key: pcs[%1].logSources[%2].timestampSource")
+                                            .arg(i)
+                                            .arg(j));
+                        return false;
+                    }
+                    const QString tsStr = tsVal.toString().trimmed();
+                    if (tsStr == QLatin1String("mtime")) {
+                        src.timestampSource = TimestampSource::Mtime;
+                    } else if (tsStr == QLatin1String("filename")) {
+                        src.timestampSource = TimestampSource::Filename;
+                    } else {
+                        setError(error, QStringLiteral("Missing or invalid key: pcs[%1].logSources[%2].timestampSource")
+                                            .arg(i)
+                                            .arg(j));
+                        return false;
+                    }
+                }
+
+                pc.logSources.append(src);
+            }
         }
 
         cfg.pcs.append(pc);

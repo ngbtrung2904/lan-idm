@@ -114,11 +114,17 @@ private:
         bool diskFullDetected = false;
         qint64 logsProgressBytes = 0;
         qint64 shotsProgressBytes = 0;
+        QVector<LogSourceConfig> resolvedLogSources;
+        int logsSubStageIndex = 0;
+        qint64 logsCompletedBytes = 0;
+        qint64 currentSubStagePlannedBytes = 0;
+        int worstLogsExitCode = 0;
     };
 
     void scheduleNext();
     void startJob(int index);
-    void startStage(int index, bool isLogs);
+    void startNextLogsSubStage(int index);
+    void startStage(int index, bool isLogs, int logsSourceIndex, const QVector<FileEntry> &entries);
     void appendStderrChunk(int index, const QString &chunk);
     void handleProcessOutput(int index, QProcess *proc);
     void handleProcessFinished(int index, QProcess *proc, bool isLogs,

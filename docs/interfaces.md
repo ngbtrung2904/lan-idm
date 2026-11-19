@@ -33,10 +33,23 @@ enum class JobState {
     Skipped
 };
 
+enum class TimestampSource {
+    Mtime = 0,
+    Filename
+};
+
+struct LogSourceConfig {
+    QString name;
+    QString remotePath;
+    QString destSubdir;
+    TimestampSource timestampSource = TimestampSource::Mtime;
+};
+
 struct PcConfig {
     QString id;
     QString host;
     int port = 22;
+    QVector<LogSourceConfig> logSources;
 };
 
 struct PathsConfig {
@@ -62,6 +75,7 @@ struct FileEntry {
     QString relPath;
     qint64 size = 0;
     QDateTime mtime;
+    int sourceIndex = 0;
 };
 
 struct PcListing {

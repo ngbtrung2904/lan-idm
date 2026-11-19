@@ -28,7 +28,7 @@ public:
 
     void listPc(const PcConfig &pc,
                 const QString &sshUser,
-                const QString &logsRelDir,
+                const QVector<LogSourceConfig> &logSources,
                 const QString &shotsRelDir,
                 const SshParams &sshParams);
     void cancel();
@@ -41,14 +41,14 @@ signals:
 private:
     struct PendingJob {
         PcListing listing;
-        std::unique_ptr<QProcess> logsProc;
+        std::vector<std::unique_ptr<QProcess>> logProcs;
         std::unique_ptr<QProcess> shotsProc;
-        bool logsDone = false;
-        bool shotsDone = false;
+        int pendingCount = 0;
     };
 
     void startDirProcess(const QString &pcId,
-                         bool isLogs,
+                         int sourceIndex,
+                         const QString &sourceName,
                          const QString &sshCmd,
                          const QString &remoteSpec);
     void cleanupJob(const QString &pcId, bool syncWait);

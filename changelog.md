@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0] - 2026-11-19
+
+### Features
+- **Per-PC Custom Log Layouts & Filename Timestamp Filtering**:
+  - `src/core/Types.h`: Added `TimestampSource` (`Mtime`, `Filename`), `LogSourceConfig`, `PcConfig::logSources`, `FileEntry::sourceIndex`, and `resolveLogSources()` helper.
+  - `src/core/ConfigStore.cpp`: Added parsing and validation for optional per-PC `logSources` arrays (validating `name`, safe relative `remotePath`/`destSubdir`, `timestampSource` values `"mtime"`/`"filename"`, and rejecting duplicate non-empty `destSubdir` entries).
+  - `src/core/TimeFilter.{h,cpp}`: Added `TimeFilter::extractFilenameDate()` to extract `yyyyMMdd` dates from log basenames and updated `TimeFilter::filterPc()` to filter per log source using either filename date or filesystem mtime.
+  - `src/core/RsyncLister.{h,cpp}`: Extended `listPc()` to list multiple log sources per PC in parallel, tagging entries with their `sourceIndex`, while waiting for all log sources and screenshots to complete.
+  - `src/core/TransferEngine.{h,cpp}`: Extended `CopyingLogs` to iterate through each resolved `LogSourceConfig` sub-stage into `<sessionDir>/<pcId>/logs[/<destSubdir>]`, preserving smooth cumulative progress, partial-transfer warnings, and recursive `.partial` cleanup on verification.
+  - `src/app/SourcesController.cpp`: Wired `resolveLogSources()` into `RsyncLister::listPc()` and `TimeFilter::filterPc()`.
+  - `config.example.json`, `docs/interfaces.md`: Documented `LogSourceConfig`/`TimestampSource` contracts and added `pc07` with `syslog` (`.app/aesardp/syslog`) and `metadata` (`app/aesardp/metadata`) filename-filtered log sources.
+
 ## [0.1.0] - 2026-11-19
 
 ### Features

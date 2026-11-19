@@ -29,10 +29,23 @@ enum class JobState {
     Skipped
 };
 
+enum class TimestampSource {
+    Mtime = 0,
+    Filename
+};
+
+struct LogSourceConfig {
+    QString name;
+    QString remotePath;
+    QString destSubdir;
+    TimestampSource timestampSource = TimestampSource::Mtime;
+};
+
 struct PcConfig {
     QString id;
     QString host;
     int port = 22;
+    QVector<LogSourceConfig> logSources;
 };
 
 struct PathsConfig {
@@ -58,6 +71,7 @@ struct FileEntry {
     QString relPath;
     qint64 size = 0;
     QDateTime mtime;
+    int sourceIndex = 0;
 };
 
 struct PcListing {
@@ -116,6 +130,17 @@ struct PcTransferResult {
     QStringList errors;
 };
 
+inline QVector<LogSourceConfig> resolveLogSources(const PcConfig &pc,
+                                                  const PathsConfig &defaultPaths) {
+    if (!pc.logSources.isEmpty()) {
+        return pc.logSources;
+    }
+    return {LogSourceConfig{QStringLiteral("logs"),
+                            defaultPaths.logs,
+                            QString(),
+                            TimestampSource::Mtime}};
+}
+
 inline QString pcStateText(PcState state) {
     switch (state) {
     case PcState::Unknown:         return QStringLiteral("Unknown");
@@ -160,6 +185,8 @@ inline QString jobStateText(JobState state) {
 
 Q_DECLARE_METATYPE(dc::PcState)
 Q_DECLARE_METATYPE(dc::JobState)
+Q_DECLARE_METATYPE(dc::TimestampSource)
+Q_DECLARE_METATYPE(dc::LogSourceConfig)
 Q_DECLARE_METATYPE(dc::FileEntry)
 Q_DECLARE_METATYPE(dc::PcListing)
 Q_DECLARE_METATYPE(dc::UsbDrive)

@@ -592,7 +592,7 @@ void SourcesController::startCopy() {
         if (i < mConfig.pcs.size() && mConfig.pcs[i].id == pcItem.id) {
             spec.pc = mConfig.pcs[i];
         } else {
-            spec.pc = PcConfig{pcItem.id, pcItem.host, pcItem.port};
+            spec.pc = PcConfig{pcItem.id, pcItem.host, pcItem.port, {}};
         }
 
         if (pcItem.selectable() && pcItem.selected) {
@@ -663,7 +663,7 @@ void SourcesController::onProbeFinished(const QString &pcId, dc::PcState state, 
                 ++mActiveListings;
                 mRsyncLister.listPc(pc,
                                     mConfig.sshUser,
-                                    mConfig.paths.logs,
+                                    resolveLogSources(pc, mConfig.paths),
                                     mConfig.paths.screenshots,
                                     buildSshParams(pc.port));
             }
@@ -737,7 +737,12 @@ void SourcesController::applyFilterToRow(int row) {
         return;
     }
 
+    const QVector<LogSourceConfig> logSources =
+        (row < mConfig.pcs.size() && mConfig.pcs.at(row).id == item.id)
+            ? resolveLogSources(mConfig.pcs.at(row), mConfig.paths)
+            : resolveLogSources(PcConfig{}, mConfig.paths);
     const FilteredPc filtered = TimeFilter::filterPc(it.value(),
+                                                     logSources,
                                                      timeWindow(),
                                                      mConfig.logs.includeModifiedAfterEnd);
     mFiltered.insert(item.id, filtered);

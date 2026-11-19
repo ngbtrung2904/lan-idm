@@ -456,6 +456,11 @@ void TransferEngine::startJob(int index) {
     InternalJob &job = mJobs[static_cast<size_t>(index)];
     job.logsProgressBytes = 0;
     job.shotsProgressBytes = 0;
+    job.resolvedLogSources = resolveLogSources(job.spec.pc, mConfig.paths);
+    job.logsSubStageIndex = 0;
+    job.logsCompletedBytes = 0;
+    job.currentSubStagePlannedBytes = 0;
+    job.worstLogsExitCode = 0;
     job.stdoutBuffer.clear();
     job.stderrText.clear();
     job.diskFullDetected = false;
@@ -473,11 +478,11 @@ void TransferEngine::startJob(int index) {
     job.status.result.errors.clear();
 
     if (!job.spec.files.logs.isEmpty()) {
-        startStage(index, true);
+        startNextLogsSubStage(index);
     } else {
         job.status.result.logsRsyncExitCode = 0;
         if (!job.spec.files.screenshots.isEmpty()) {
-            startStage(index, false);
+            startStage(index, false, -1, job.spec.files.screenshots);
         } else {
             job.status.result.shotsRsyncExitCode = 0;
             verifyJob(index);
@@ -485,7 +490,44 @@ void TransferEngine::startJob(int index) {
     }
 }
 
-void TransferEngine::startStage(int index, bool isLogs) {
+void TransferEngine::startNextLogsSubStage(int index) {
+    if (mPhase != EnginePhase::Running) {
+        return;
+    }
+
+    InternalJob &job = mJobs[static_cast<size_t>(index)];
+    while (job.logsSubStageIndex < job.resolvedLogSources.size()) {
+        const int srcIdx = job.logsSubStageIndex;
+        QVector<FileEntry> sourceEntries;
+        qint64 sourceBytes = 0;
+        for (const FileEntry &entry : job.spec.files.logs) {
+            if (entry.sourceIndex == srcIdx) {
+                sourceEntries.append(entry);
+                sourceBytes += entry.size;
+            }
+        }
+        if (!sourceEntries.isEmpty()) {
+            job.currentSubStagePlannedBytes = sourceBytes;
+            startStage(index, true, srcIdx, sourceEntries);
+            return;
+        }
+        ++job.logsSubStageIndex;
+    }
+
+    job.logsProgressBytes = job.spec.files.logsBytes;
+    job.status.result.logsRsyncExitCode = job.worstLogsExitCode;
+    if (!job.spec.files.screenshots.isEmpty()) {
+        startStage(index, false, -1, job.spec.files.screenshots);
+    } else {
+        job.status.result.shotsRsyncExitCode = 0;
+        verifyJob(index);
+    }
+}
+
+void TransferEngine::startStage(int index,
+                                bool isLogs,
+                                int logsSourceIndex,
+                                const QVector<FileEntry> &entries) {
     if (mPhase != EnginePhase::Running) {
         return;
     }
@@ -510,10 +552,10 @@ void TransferEngine::startStage(int index, bool isLogs) {
         return;
     }
 
-    const QString stageName = isLogs ? QStringLiteral("logs") : QStringLiteral("screenshots");
-    const QString listFile = QDir(mTempDir->path())
-                                 .filePath(QStringLiteral("%1_%2.list").arg(job.spec.pc.id, stageName));
-    const QVector<FileEntry> &entries = isLogs ? job.spec.files.logs : job.spec.files.screenshots;
+    const QString listFileName = isLogs
+                                     ? QStringLiteral("%1_logs_%2.list").arg(job.spec.pc.id).arg(logsSourceIndex)
+                                     : QStringLiteral("%1_screenshots.list").arg(job.spec.pc.id);
+    const QString listFile = QDir(mTempDir->path()).filePath(listFileName);
 
     QString listErr;
     if (!PathSanitizer::writeFilesFromList(listFile, entries, &listErr)) {
@@ -523,8 +565,19 @@ void TransferEngine::startStage(int index, bool isLogs) {
         return;
     }
 
-    const QString destDir = QDir(mSessionDir)
-                                .filePath(QStringLiteral("%1/%2").arg(job.spec.pc.id, stageName));
+    QString destDir;
+    QString remoteRelDir;
+    if (isLogs) {
+        const LogSourceConfig &src = job.resolvedLogSources.at(logsSourceIndex);
+        remoteRelDir = src.remotePath;
+        destDir = src.destSubdir.isEmpty()
+                      ? QDir(mSessionDir).filePath(QStringLiteral("%1/logs").arg(job.spec.pc.id))
+                      : QDir(mSessionDir).filePath(QStringLiteral("%1/logs/%2").arg(job.spec.pc.id, src.destSubdir));
+    } else {
+        remoteRelDir = mConfig.paths.screenshots;
+        destDir = QDir(mSessionDir).filePath(QStringLiteral("%1/screenshots").arg(job.spec.pc.id));
+    }
+
     if (!QDir().mkpath(destDir)) {
         failJob(index,
                 QStringLiteral("Could not create the destination folder on the USB drive. Check that the drive is connected and writable, then click Retry."),
@@ -539,7 +592,6 @@ void TransferEngine::startStage(int index, bool isLogs) {
     sshParams.agentSocket = mAgentSocket;
     const QString sshCmd = SshOptions::buildRsyncSshCommand(sshParams);
 
-    const QString remoteRelDir = isLogs ? mConfig.paths.logs : mConfig.paths.screenshots;
     const QString remoteSpec = QStringLiteral("%1@%2:%3")
                                    .arg(mConfig.sshUser,
                                         job.spec.pc.host,
@@ -632,7 +684,7 @@ void TransferEngine::handleProcessOutput(int index, QProcess *proc) {
                 const ProgressLine parsed = ProgressLine::parseOutputLine(line);
                 if (parsed.isProgress) {
                     if (job.status.state == JobState::CopyingLogs) {
-                        job.logsProgressBytes = parsed.bytesDone;
+                        job.logsProgressBytes = job.logsCompletedBytes + parsed.bytesDone;
                     } else if (job.status.state == JobState::CopyingScreenshots) {
                         job.shotsProgressBytes = parsed.bytesDone;
                     }
@@ -697,16 +749,15 @@ void TransferEngine::handleProcessFinished(int index, QProcess *proc, bool isLog
         return;
     }
 
-    if (isLogs) {
-        job.status.result.logsRsyncExitCode = normalExit ? exitCode : -1;
-    } else {
-        job.status.result.shotsRsyncExitCode = normalExit ? exitCode : -1;
-    }
-
     const bool isPartialWarning = normalExit && (exitCode == 23 || exitCode == 24);
     const bool isOk = normalExit && (exitCode == 0);
 
     if (!isOk && !isPartialWarning) {
+        if (isLogs) {
+            job.status.result.logsRsyncExitCode = normalExit ? exitCode : -1;
+        } else {
+            job.status.result.shotsRsyncExitCode = normalExit ? exitCode : -1;
+        }
         const QString userMsg = classifyRsyncFailure(exitCode, normalExit,
                                                      job.stderrText.trimmed(),
                                                      job.diskFullDetected);
@@ -718,8 +769,25 @@ void TransferEngine::handleProcessFinished(int index, QProcess *proc, bool isLog
         return;
     }
 
+    if (isLogs) {
+        if (isPartialWarning && job.worstLogsExitCode == 0) {
+            job.worstLogsExitCode = exitCode;
+        }
+        job.status.result.logsRsyncExitCode = job.worstLogsExitCode;
+    } else {
+        job.status.result.shotsRsyncExitCode = exitCode;
+    }
+
     if (isPartialWarning) {
-        const QString kind = isLogs ? QStringLiteral("logs") : QStringLiteral("screenshots");
+        QString kind = QStringLiteral("screenshots");
+        if (isLogs) {
+            if (job.logsSubStageIndex >= 0 && job.logsSubStageIndex < job.resolvedLogSources.size()
+                && job.resolvedLogSources.size() > 1) {
+                kind = job.resolvedLogSources.at(job.logsSubStageIndex).name;
+            } else {
+                kind = QStringLiteral("logs");
+            }
+        }
         const QString msg = QStringLiteral("%1: partial transfer of %2 (rsync exit %3)")
                                 .arg(job.spec.pc.id, kind)
                                 .arg(exitCode);
@@ -728,13 +796,10 @@ void TransferEngine::handleProcessFinished(int index, QProcess *proc, bool isLog
     }
 
     if (isLogs) {
-        job.logsProgressBytes = job.spec.files.logsBytes;
-        if (!job.spec.files.screenshots.isEmpty()) {
-            startStage(index, false);
-        } else {
-            job.status.result.shotsRsyncExitCode = 0;
-            verifyJob(index);
-        }
+        job.logsCompletedBytes += job.currentSubStagePlannedBytes;
+        job.logsProgressBytes = job.logsCompletedBytes;
+        ++job.logsSubStageIndex;
+        startNextLogsSubStage(index);
     } else {
         job.shotsProgressBytes = job.spec.files.shotsBytes;
         verifyJob(index);
@@ -796,9 +861,18 @@ void TransferEngine::verifyJob(int index) {
                                   || (job.status.result.logsRsyncExitCode != 0)
                                   || (job.status.result.shotsRsyncExitCode != 0);
 
+    QStringList partialDirs;
+    partialDirs.append(QDir(logsDir).filePath(QStringLiteral(".partial")));
+    for (const LogSourceConfig &src : job.resolvedLogSources) {
+        if (!src.destSubdir.isEmpty()) {
+            partialDirs.append(QDir(QDir(logsDir).filePath(src.destSubdir)).filePath(QStringLiteral(".partial")));
+        }
+    }
+    partialDirs.append(QDir(shotsDir).filePath(QStringLiteral(".partial")));
+
     QPointer<TransferEngine> self(this);
     QThreadPool::globalInstance()->start(QRunnable::create([self, generation, index,
-                                                            logsDir, shotsDir,
+                                                            logsDir, shotsDir, partialDirs,
                                                             plannedLogsCount, plannedShotsCount,
                                                             plannedLogsBytes, plannedShotsBytes,
                                                             hadPriorWarnings]() {
@@ -816,8 +890,9 @@ void TransferEngine::verifyJob(int index) {
                            && logsBytes == plannedLogsBytes
                            && shotsBytes == plannedShotsBytes;
         if (clean) {
-            QDir(QDir(logsDir).filePath(QStringLiteral(".partial"))).removeRecursively();
-            QDir(QDir(shotsDir).filePath(QStringLiteral(".partial"))).removeRecursively();
+            for (const QString &partialDir : partialDirs) {
+                QDir(partialDir).removeRecursively();
+            }
         }
 
         if (!self) {

@@ -16,7 +16,25 @@
     { "id": "pc03", "host": "192.168.10.13" },
     { "id": "pc04", "host": "192.168.10.14" },
     { "id": "pc05", "host": "192.168.10.15" },
-    { "id": "pc06", "host": "192.168.10.16" }
+    { "id": "pc06", "host": "192.168.10.16" },
+    {
+      "id": "pc07",
+      "host": "192.168.10.17",
+      "logSources": [
+        {
+          "name": "syslog",
+          "remotePath": ".app/aesardp/syslog",
+          "destSubdir": "syslog",
+          "timestampSource": "filename"
+        },
+        {
+          "name": "metadata",
+          "remotePath": "app/aesardp/metadata",
+          "destSubdir": "metadata",
+          "timestampSource": "filename"
+        }
+      ]
+    }
   ]
 }
 

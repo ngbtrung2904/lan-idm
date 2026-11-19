@@ -23,6 +23,7 @@ private slots:
     void configStoreMissingKeys();
     void configStoreInvalidMaxParallelAndPcs();
     void configStoreResolvePathPrecedence();
+    void configStoreLogSourcesValidAndInvalid();
 
     // SshOptions
     void sshOptionsRequiredFlagsAndNeverStrictNo();
@@ -41,6 +42,8 @@ private slots:
     void timeFilterLogsRuleOnVsOff();
     void timeFilterDstTransitionDay();
     void timeFilterInvalidWindow();
+    void timeFilterExtractFilenameDate();
+    void timeFilterFilenameTimestampSources();
 
     // SpaceEstimator
     void spaceEstimatorExactAndMarginBoundary();
@@ -174,6 +177,131 @@ void TestCoreRemote::configStoreResolvePathPrecedence() {
     if (!oldEnv.isEmpty()) {
         qputenv("DATA_COLLECTOR_CONFIG", oldEnv);
     }
+}
+
+void TestCoreRemote::configStoreLogSourcesValidAndInvalid() {
+    AppConfig cfg;
+    QString err;
+
+    // Valid syslog + metadata custom logSources on pc07
+    const QByteArray validJson = R"({
+        "sshKeyPath": "/tmp/key",
+        "knownHostsPath": "/tmp/kh",
+        "pcs": [
+            { "id": "pc01", "host": "10.0.0.1" },
+            {
+                "id": "pc07",
+                "host": "10.0.0.7",
+                "logSources": [
+                    {
+                        "name": "syslog",
+                        "remotePath": ".app/aesardp/syslog",
+                        "destSubdir": "syslog",
+                        "timestampSource": "filename"
+                    },
+                    {
+                        "name": "metadata",
+                        "remotePath": "app/aesardp/metadata",
+                        "destSubdir": "metadata",
+                        "timestampSource": "filename"
+                    }
+                ]
+            }
+        ]
+    })";
+    QVERIFY2(ConfigStore::parseJson(validJson, &cfg, &err), qPrintable(err));
+    QCOMPARE(cfg.pcs.size(), 2);
+    QVERIFY(cfg.pcs[0].logSources.isEmpty());
+    const QVector<LogSourceConfig> defaultResolved = resolveLogSources(cfg.pcs[0], cfg.paths);
+    QCOMPARE(defaultResolved.size(), 1);
+    QCOMPARE(defaultResolved[0].remotePath, cfg.paths.logs);
+    QCOMPARE(defaultResolved[0].timestampSource, TimestampSource::Mtime);
+
+    QCOMPARE(cfg.pcs[1].logSources.size(), 2);
+    QCOMPARE(cfg.pcs[1].logSources[0].name, QStringLiteral("syslog"));
+    QCOMPARE(cfg.pcs[1].logSources[0].remotePath, QStringLiteral(".app/aesardp/syslog"));
+    QCOMPARE(cfg.pcs[1].logSources[0].destSubdir, QStringLiteral("syslog"));
+    QCOMPARE(cfg.pcs[1].logSources[0].timestampSource, TimestampSource::Filename);
+    QCOMPARE(cfg.pcs[1].logSources[1].name, QStringLiteral("metadata"));
+    QCOMPARE(cfg.pcs[1].logSources[1].remotePath, QStringLiteral("app/aesardp/metadata"));
+    QCOMPARE(cfg.pcs[1].logSources[1].destSubdir, QStringLiteral("metadata"));
+    QCOMPARE(cfg.pcs[1].logSources[1].timestampSource, TimestampSource::Filename);
+
+    // Invalid timestampSource
+    err.clear();
+    QVERIFY(!ConfigStore::parseJson(R"({
+        "sshKeyPath": "/tmp/key",
+        "knownHostsPath": "/tmp/kh",
+        "pcs": [{
+            "id": "pc07",
+            "host": "10.0.0.7",
+            "logSources": [{
+                "name": "syslog",
+                "remotePath": ".app/aesardp/syslog",
+                "destSubdir": "syslog",
+                "timestampSource": "ctime"
+            }]
+        }]
+    })", &cfg, &err));
+    QCOMPARE(err, QStringLiteral("Missing or invalid key: pcs[0].logSources[0].timestampSource"));
+
+    // Unsafe remotePath
+    err.clear();
+    QVERIFY(!ConfigStore::parseJson(R"({
+        "sshKeyPath": "/tmp/key",
+        "knownHostsPath": "/tmp/kh",
+        "pcs": [{
+            "id": "pc07",
+            "host": "10.0.0.7",
+            "logSources": [{
+                "name": "syslog",
+                "remotePath": "../etc/passwd",
+                "destSubdir": "syslog"
+            }]
+        }]
+    })", &cfg, &err));
+    QVERIFY2(err.contains(QStringLiteral("remotePath")), qPrintable(err));
+
+    // Unsafe destSubdir
+    err.clear();
+    QVERIFY(!ConfigStore::parseJson(R"({
+        "sshKeyPath": "/tmp/key",
+        "knownHostsPath": "/tmp/kh",
+        "pcs": [{
+            "id": "pc07",
+            "host": "10.0.0.7",
+            "logSources": [{
+                "name": "syslog",
+                "remotePath": ".app/aesardp/syslog",
+                "destSubdir": "../escape"
+            }]
+        }]
+    })", &cfg, &err));
+    QVERIFY2(err.contains(QStringLiteral("destSubdir")), qPrintable(err));
+
+    // Duplicate non-empty destSubdir
+    err.clear();
+    QVERIFY(!ConfigStore::parseJson(R"({
+        "sshKeyPath": "/tmp/key",
+        "knownHostsPath": "/tmp/kh",
+        "pcs": [{
+            "id": "pc07",
+            "host": "10.0.0.7",
+            "logSources": [
+                {
+                    "name": "syslog",
+                    "remotePath": ".app/aesardp/syslog",
+                    "destSubdir": "same"
+                },
+                {
+                    "name": "metadata",
+                    "remotePath": "app/aesardp/metadata",
+                    "destSubdir": "same"
+                }
+            ]
+        }]
+    })", &cfg, &err));
+    QVERIFY2(err.contains(QStringLiteral("destSubdir")), qPrintable(err));
 }
 
 void TestCoreRemote::sshOptionsRequiredFlagsAndNeverStrictNo() {
@@ -320,7 +448,8 @@ void TestCoreRemote::timeFilterExactEdgesAndOutside() {
         {QStringLiteral("after.png"), 500, end.addSecs(1)},
     };
 
-    const FilteredPc filtered = TimeFilter::filterPc(listing, window, true);
+    const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
+    const FilteredPc filtered = TimeFilter::filterPc(listing, defaultSources, window, true);
     QCOMPARE(filtered.pcId, QStringLiteral("pc01"));
     QCOMPARE(filtered.screenshots.size(), 3);
     QCOMPARE(filtered.screenshots[0].relPath, QStringLiteral("at_start.png"));
@@ -342,11 +471,12 @@ void TestCoreRemote::timeFilterLogsRuleOnVsOff() {
         {QStringLiteral("active_after_end.log"), 400, end.addSecs(3600)},
     };
 
-    const FilteredPc ruleOn = TimeFilter::filterPc(listing, window, true);
+    const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
+    const FilteredPc ruleOn = TimeFilter::filterPc(listing, defaultSources, window, true);
     QCOMPARE(ruleOn.logs.size(), 2);
     QCOMPARE(ruleOn.logsBytes, 600);
 
-    const FilteredPc ruleOff = TimeFilter::filterPc(listing, window, false);
+    const FilteredPc ruleOff = TimeFilter::filterPc(listing, defaultSources, window, false);
     QCOMPARE(ruleOff.logs.size(), 1);
     QCOMPARE(ruleOff.logs[0].relPath, QStringLiteral("mid.log"));
     QCOMPARE(ruleOff.logsBytes, 200);
@@ -370,7 +500,8 @@ void TestCoreRemote::timeFilterDstTransitionDay() {
         {QStringLiteral("outside.png"), 30, QDateTime(QDate(2026, 3, 8), QTime(4, 0, 1), tz)},
     };
 
-    const FilteredPc filtered = TimeFilter::filterPc(listing, window, true);
+    const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
+    const FilteredPc filtered = TimeFilter::filterPc(listing, defaultSources, window, true);
     QCOMPARE(filtered.screenshots.size(), 2);
     QCOMPARE(filtered.shotsBytes, 30);
 }
@@ -383,16 +514,72 @@ void TestCoreRemote::timeFilterInvalidWindow() {
     listing.logs = {{QStringLiteral("a.log"), 100, t}};
     listing.screenshots = {{QStringLiteral("a.png"), 100, t}};
 
+    const QVector<LogSourceConfig> defaultSources = resolveLogSources(PcConfig{}, PathsConfig{});
+
     // start == end
-    const FilteredPc eqRes = TimeFilter::filterPc(listing, TimeWindow{t, t}, true);
+    const FilteredPc eqRes = TimeFilter::filterPc(listing, defaultSources, TimeWindow{t, t}, true);
     QVERIFY(eqRes.logs.isEmpty());
     QVERIFY(eqRes.screenshots.isEmpty());
     QCOMPARE(eqRes.totalBytes(), 0);
 
     // start > end
-    const FilteredPc revRes = TimeFilter::filterPc(listing, TimeWindow{t.addSecs(60), t}, true);
+    const FilteredPc revRes = TimeFilter::filterPc(listing, defaultSources, TimeWindow{t.addSecs(60), t}, true);
     QVERIFY(revRes.logs.isEmpty());
     QVERIFY(revRes.screenshots.isEmpty());
+}
+
+void TestCoreRemote::timeFilterExtractFilenameDate() {
+    QCOMPARE(TimeFilter::extractFilenameDate(QStringLiteral("appardp.LOG.20261101-002344.883159")),
+             QDate(2026, 11, 1));
+    QCOMPARE(TimeFilter::extractFilenameDate(QStringLiteral("minfo/minfo-rdp-20260929_084049_1")),
+             QDate(2026, 9, 29));
+    QCOMPARE(TimeFilter::extractFilenameDate(QStringLiteral("cinfo/cinfo-20261119.log")),
+             QDate(2026, 11, 19));
+
+    // Non-date or invalid date filenames
+    QVERIFY(!TimeFilter::extractFilenameDate(QStringLiteral("app.log")).isValid());
+    QVERIFY(!TimeFilter::extractFilenameDate(QStringLiteral("kinfo/report_123456789.log")).isValid());
+    QVERIFY(!TimeFilter::extractFilenameDate(QStringLiteral("bad_20260230.log")).isValid());
+    QVERIFY(!TimeFilter::extractFilenameDate(QStringLiteral("20261101/no_date_in_basename.log")).isValid());
+}
+
+void TestCoreRemote::timeFilterFilenameTimestampSources() {
+    const QDateTime start(QDate(2026, 11, 1), QTime(8, 0, 0));
+    const QDateTime end(QDate(2026, 11, 19), QTime(17, 0, 0));
+    const TimeWindow window{start, end};
+
+    // Deliberately set filesystem mtime far outside the window to prove filename date is used
+    const QDateTime staleMtime(QDate(2020, 1, 1), QTime(0, 0, 0));
+    const QDateTime futureMtime(QDate(2030, 1, 1), QTime(0, 0, 0));
+
+    const QVector<LogSourceConfig> sources = {
+        LogSourceConfig{QStringLiteral("syslog"), QStringLiteral(".app/aesardp/syslog"),
+                        QStringLiteral("syslog"), TimestampSource::Filename},
+        LogSourceConfig{QStringLiteral("metadata"), QStringLiteral("app/aesardp/metadata"),
+                        QStringLiteral("metadata"), TimestampSource::Filename}
+    };
+
+    PcListing listing;
+    listing.pcId = QStringLiteral("pc07");
+    listing.logs = {
+        {QStringLiteral("appardp.LOG.20261031-235959.000001"), 100, start.addSecs(60), 0},    // before window (mtime inside!)
+        {QStringLiteral("appardp.LOG.20261101-002344.883159"), 200, staleMtime, 0},           // on start date (mtime stale!)
+        {QStringLiteral("appardp.LOG.20261120-000001.000001"), 300, start.addSecs(120), 0},   // after window (mtime inside!)
+        {QStringLiteral("minfo/minfo-rdp-20260929_084049_1"), 400, start.addSecs(180), 1},    // before window
+        {QStringLiteral("cinfo/cinfo-20261119.log"), 500, futureMtime, 1},                    // on end date (mtime future!)
+        {QStringLiteral("kinfo/kinfo-20261110_120000.dat"), 600, staleMtime, 1},              // inside window (mtime stale!)
+        {QStringLiteral("kinfo/readme.txt"), 700, start.addSecs(60), 1}                       // no date in filename
+    };
+
+    const FilteredPc filtered = TimeFilter::filterPc(listing, sources, window, true);
+    QCOMPARE(filtered.logs.size(), 3);
+    QCOMPARE(filtered.logs[0].relPath, QStringLiteral("appardp.LOG.20261101-002344.883159"));
+    QCOMPARE(filtered.logs[0].sourceIndex, 0);
+    QCOMPARE(filtered.logs[1].relPath, QStringLiteral("cinfo/cinfo-20261119.log"));
+    QCOMPARE(filtered.logs[1].sourceIndex, 1);
+    QCOMPARE(filtered.logs[2].relPath, QStringLiteral("kinfo/kinfo-20261110_120000.dat"));
+    QCOMPARE(filtered.logs[2].sourceIndex, 1);
+    QCOMPARE(filtered.logsBytes, 1300);
 }
 
 void TestCoreRemote::spaceEstimatorExactAndMarginBoundary() {

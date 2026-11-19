@@ -96,7 +96,9 @@ RsyncLister::RsyncLister(QObject *parent)
 
 RsyncLister::~RsyncLister() {
     for (auto &entry : mJobs) {
-        stopProcessSync(entry.second.logsProc.get(), this);
+        for (std::unique_ptr<QProcess> &proc : entry.second.logProcs) {
+            stopProcessSync(proc.get(), this);
+        }
         stopProcessSync(entry.second.shotsProc.get(), this);
     }
     mJobs.clear();
@@ -319,7 +321,7 @@ void RsyncLister::eraseStoppingProcess(QProcess *proc) {
 
 void RsyncLister::listPc(const PcConfig &pc,
                          const QString &sshUser,
-                         const QString &logsRelDir,
+                         const QVector<LogSourceConfig> &logSources,
                          const QString &shotsRelDir,
                          const SshParams &sshParams) {
     cleanupJob(pc.id, false);
@@ -330,19 +332,25 @@ void RsyncLister::listPc(const PcConfig &pc,
 
     PendingJob job;
     job.listing.pcId = pc.id;
+    job.logProcs.resize(static_cast<size_t>(logSources.size()));
+    job.pendingCount = logSources.size() + 1;
     mJobs.emplace(pc.id, std::move(job));
 
-    const QString logsRemote = QStringLiteral("%1@%2:%3")
-                                   .arg(sshUser, pc.host, normalizeRemoteDir(logsRelDir));
+    for (int i = 0; i < logSources.size(); ++i) {
+        const LogSourceConfig &src = logSources.at(i);
+        const QString logsRemote = QStringLiteral("%1@%2:%3")
+                                       .arg(sshUser, pc.host, normalizeRemoteDir(src.remotePath));
+        startDirProcess(pc.id, i, src.name, sshCmd, logsRemote);
+    }
+
     const QString shotsRemote = QStringLiteral("%1@%2:%3")
                                     .arg(sshUser, pc.host, normalizeRemoteDir(shotsRelDir));
-
-    startDirProcess(pc.id, true, sshCmd, logsRemote);
-    startDirProcess(pc.id, false, sshCmd, shotsRemote);
+    startDirProcess(pc.id, -1, QStringLiteral("screenshots"), sshCmd, shotsRemote);
 }
 
 void RsyncLister::startDirProcess(const QString &pcId,
-                                  bool isLogs,
+                                  int sourceIndex,
+                                  const QString &sourceName,
                                   const QString &sshCmd,
                                   const QString &remoteSpec) {
     const auto it = mJobs.find(pcId);
@@ -355,30 +363,38 @@ void RsyncLister::startDirProcess(const QString &pcId,
     proc->setStandardInputFile(QProcess::nullDevice());
     configureRsyncChildProcess(proc);
 
-    if (isLogs) {
-        it->second.logsProc = std::move(procOwner);
+    if (sourceIndex >= 0) {
+        it->second.logProcs[static_cast<size_t>(sourceIndex)] = std::move(procOwner);
     } else {
         it->second.shotsProc = std::move(procOwner);
     }
 
     connect(proc, &QProcess::finished, this,
-            [this, proc, pcId, isLogs](int exitCode, QProcess::ExitStatus exitStatus) {
+            [this, proc, pcId, sourceIndex, sourceName](int exitCode, QProcess::ExitStatus exitStatus) {
                 const auto jobIt = mJobs.find(pcId);
                 if (jobIt == mJobs.end()) {
                     return;
                 }
-                std::unique_ptr<QProcess> &slot = isLogs ? jobIt->second.logsProc : jobIt->second.shotsProc;
-                if (slot.get() != proc) {
+                std::unique_ptr<QProcess> *slot = nullptr;
+                if (sourceIndex >= 0) {
+                    if (static_cast<size_t>(sourceIndex) >= jobIt->second.logProcs.size()) {
+                        return;
+                    }
+                    slot = &jobIt->second.logProcs[static_cast<size_t>(sourceIndex)];
+                } else {
+                    slot = &jobIt->second.shotsProc;
+                }
+                if (slot->get() != proc) {
                     return;
                 }
-                std::unique_ptr<QProcess> finishedProc = std::move(slot);
+                std::unique_ptr<QProcess> finishedProc = std::move(*slot);
 
                 const QByteArray stdoutData = finishedProc->readAllStandardOutput();
                 const QString stderrText = QString::fromUtf8(finishedProc->readAllStandardError()).trimmed();
                 retireProcessAsync(std::move(finishedProc));
 
                 if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-                    const QString kind = isLogs ? QStringLiteral("logs") : QStringLiteral("screenshots");
+                    const QString kind = sourceName.isEmpty() ? QStringLiteral("logs") : sourceName;
                     const QString errMsg = stderrText.isEmpty()
                                                ? QStringLiteral("Failed listing %1 (rsync exit %2)")
                                                      .arg(kind)
@@ -390,15 +406,19 @@ void RsyncLister::startDirProcess(const QString &pcId,
                     return;
                 }
 
-                if (isLogs) {
-                    jobIt->second.listing.logs = parseListOutput(stdoutData);
-                    jobIt->second.logsDone = true;
+                if (sourceIndex >= 0) {
+                    QVector<FileEntry> parsed = parseListOutput(stdoutData);
+                    jobIt->second.listing.logs.reserve(jobIt->second.listing.logs.size() + parsed.size());
+                    for (FileEntry &entry : parsed) {
+                        entry.sourceIndex = sourceIndex;
+                        jobIt->second.listing.logs.append(std::move(entry));
+                    }
                 } else {
                     jobIt->second.listing.screenshots = parseListOutput(stdoutData);
-                    jobIt->second.shotsDone = true;
                 }
 
-                if (jobIt->second.logsDone && jobIt->second.shotsDone) {
+                --jobIt->second.pendingCount;
+                if (jobIt->second.pendingCount <= 0) {
                     const PcListing completed = jobIt->second.listing;
                     mJobs.erase(jobIt);
                     emit listingFinished(pcId, completed);
@@ -406,7 +426,7 @@ void RsyncLister::startDirProcess(const QString &pcId,
             });
 
     connect(proc, &QProcess::errorOccurred, this,
-            [this, proc, pcId, isLogs](QProcess::ProcessError err) {
+            [this, proc, pcId, sourceIndex](QProcess::ProcessError err) {
                 if (err != QProcess::FailedToStart) {
                     return;
                 }
@@ -414,11 +434,19 @@ void RsyncLister::startDirProcess(const QString &pcId,
                 if (jobIt == mJobs.end()) {
                     return;
                 }
-                std::unique_ptr<QProcess> &slot = isLogs ? jobIt->second.logsProc : jobIt->second.shotsProc;
-                if (slot.get() != proc) {
+                std::unique_ptr<QProcess> *slot = nullptr;
+                if (sourceIndex >= 0) {
+                    if (static_cast<size_t>(sourceIndex) >= jobIt->second.logProcs.size()) {
+                        return;
+                    }
+                    slot = &jobIt->second.logProcs[static_cast<size_t>(sourceIndex)];
+                } else {
+                    slot = &jobIt->second.shotsProc;
+                }
+                if (slot->get() != proc) {
                     return;
                 }
-                std::unique_ptr<QProcess> failedProc = std::move(slot);
+                std::unique_ptr<QProcess> failedProc = std::move(*slot);
                 const QString errStr = failedProc->errorString();
                 retireProcessAsync(std::move(failedProc));
 
@@ -441,15 +469,19 @@ void RsyncLister::cleanupJob(const QString &pcId, bool syncWait) {
     if (it == mJobs.end()) {
         return;
     }
-    std::unique_ptr<QProcess> logsProc = std::move(it->second.logsProc);
+    std::vector<std::unique_ptr<QProcess>> logProcs = std::move(it->second.logProcs);
     std::unique_ptr<QProcess> shotsProc = std::move(it->second.shotsProc);
     mJobs.erase(it);
 
     if (syncWait) {
-        stopProcessSync(logsProc.get(), this);
+        for (std::unique_ptr<QProcess> &proc : logProcs) {
+            stopProcessSync(proc.get(), this);
+        }
         stopProcessSync(shotsProc.get(), this);
     } else {
-        retireProcessAsync(std::move(logsProc));
+        for (std::unique_ptr<QProcess> &proc : logProcs) {
+            retireProcessAsync(std::move(proc));
+        }
         retireProcessAsync(std::move(shotsProc));
     }
 }
