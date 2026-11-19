@@ -1,0 +1,61 @@
+{
+    "version": "0.2.0",
+    // The Qt "qt vsCode tools" extension can attach a debugger visualizer
+    // (qt.natvis.xml) for pretty-printing Qt types in the watch window. The
+    // path is user-specific, so it is intentionally not committed here. To
+    // enable it, run "Qt: Copy Qt Visualizer File Path" from the command
+    // palette and add the returned path as a "visualizerFile" property on
+    // the desired debug configuration.
+    "configurations": [
+        {
+            "name": "Qt C++: Debug (GCC)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_7_2-Debug/app/appardp",
+            "preLaunchTask": "Build (GCC)",
+            "envFile": "${workspaceFolder}/.vscode/ros2.env",
+            "args": [
+                "--u", "--sim"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable GDB pretty-printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "visualizerFile": "${workspaceFolder}/.vscode/qt.natvis.xml"
+        },
+        {
+            "name": "Qt C++: Debug (Clang)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_7_2-Debug/app/appardp",
+            "preLaunchTask": "Build (Clang+Mold)",
+            "envFile": "${workspaceFolder}/.vscode/ros2.env",
+            "args": [
+                "--u", "--sim"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable GDB pretty-printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "visualizerFile": "${workspaceFolder}/.vscode/qt.natvis.xml"
+        }
+    ]
+}

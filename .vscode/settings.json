@@ -1,0 +1,63 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.cmakePath": "${workspaceFolder}/.vscode/cmake-with-ros2",
+    "cmake.configureOnOpen": true,
+    "cmake.useCMakePresets": "always",
+    "cmake.configurePreset": "gcc-debug",
+    "cmake.buildPreset": "gcc-debug",
+    "cmake.testPreset": "gcc-debug",
+    "terminal.integrated.profiles.linux": {
+        "ROS 2 Rolling": {
+            "path": "/bin/bash",
+            "args": [
+                "-c",
+                "source /opt/ros/rolling/setup.bash && exec bash"
+            ],
+            "icon": "terminal-linux"
+        },
+        "ROS 2 with Protocol": {
+            "path": "/bin/bash",
+            "args": [
+                "-c",
+                "source /opt/ros/rolling/setup.bash && source ${workspaceFolder}/protocol/install/setup.bash && exec bash"
+            ],
+            "icon": "terminal-linux"
+        }
+    },
+    "terminal.integrated.defaultProfile.linux": "ROS 2 Rolling",
+    "editor.formatOnSave": false,
+    "[cpp]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    },
+    "[c]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    },
+    "[qml]": {
+        "editor.defaultFormatter": "TheQtCompany.qt-qml"
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "clangd.arguments": [
+        "--background-index",
+        "--clang-tidy",
+        "--header-insertion=iwyu",
+        "--completion-style=detailed",
+        "--function-arg-placeholders=true",
+        "--compile-commands-dir=${workspaceFolder}/build/Desktop_Qt_6_7_2-Debug"
+    ],
+    "clangd.fallbackFlags": [
+        "-std=c++17"
+    ],
+    "testing.automaticallyOpenPeekView": "never",
+    "testing.automaticallyOpenTestResults": "openOnTestStart",
+    "qttools.injectNatvisFile": false,
+    "files.exclude": {
+        "**/build": true,
+        "**/analysis-reports": true
+    },
+    "search.exclude": {
+        "**/build": true,
+        "**/analysis-reports": true
+    }
+}

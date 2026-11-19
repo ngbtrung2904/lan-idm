@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/qml">
+        <file>qmldir</file>
+        <file>Theme.qml</file>
+        <file>Main.qml</file>
+        <file>ConfigErrorWindow.qml</file>
+        <file>components/FormatUtils.js</file>
+        <file>components/PrimaryButton.qml</file>
+        <file>components/OutlineButton.qml</file>
+        <file>components/StatusChip.qml</file>
+        <file>components/AlertBanner.qml</file>
+        <file>components/DateTimeField.qml</file>
+        <file>components/AppHeader.qml</file>
+        <file>views/LoginView.qml</file>
+        <file>views/SourcesView.qml</file>
+        <file>views/ProgressView.qml</file>
+    </qresource>
+</RCC>

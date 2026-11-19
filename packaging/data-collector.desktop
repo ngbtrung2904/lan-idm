@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Data Collector
+Comment=Collect logs and screenshots from headless PCs onto a USB drive
+Exec=/usr/local/bin/data-collector
+Icon=folder-download
+Terminal=false
+Categories=Utility;System;
