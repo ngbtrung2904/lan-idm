@@ -75,7 +75,7 @@ Both scripts are idempotent and support `--dry-run`, which prints every command 
 1. Generates a passphrase-protected `ed25519` key pair (`~/.local/share/DataCollector/collector_key`).
 2. Scans each PC's SSH host key (`ssh-keyscan`), displays its **SHA256 fingerprint**, and asks you to verify and confirm before writing to `~/.local/share/DataCollector/known_hosts`. (Host keys are never auto-accepted.)
 3. Copies and runs `scripts/provision-pc.sh` on each PC (you enter the PC password / `sudo` password once during initial setup).
-4. Writes `~/.config/DataCollector/config.json`.
+4. Writes or **merges** into `~/.config/DataCollector/config.json` (if `config.json` already exists, new PCs are appended and existing PCs with the same `id` are updated in place while preserving all other PCs and custom fields such as `pc07`'s `logSources` — so you can run `setup-desktop.sh` one PC at a time).
 5. Runs a read-only `rsync -d --list-only` probe against every PC.
 
 #### Step 1 — Preview with `--dry-run`

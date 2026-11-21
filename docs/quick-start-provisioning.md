@@ -48,7 +48,7 @@ Then open **Data Collector** and do a test collection from pc01 — follow **Par
 
 ## Phase 3: Roll Out to All PCs
 
-Re-run with all 7 hosts — the script is idempotent, so existing PCs are updated safely:
+Re-run one PC at a time (or with all remaining hosts) — the script is idempotent and automatically **merges** new PCs into your existing `~/.config/DataCollector/config.json` without erasing previously configured PCs:
 ```bash
 ./scripts/setup-desktop.sh --user user --timezone Asia/Ho_Chi_Minh \
   --hosts pc01:192.168.10.11,pc02:192.168.10.12,pc03:192.168.10.13,pc04:192.168.10.14,pc05:192.168.10.15,pc06:192.168.10.16,pc07:192.168.10.17 \

@@ -504,7 +504,7 @@ else
     fi
 fi
 
-# --- Step 4: Write config.json ---
+# --- Step 4: Write or merge config.json ---
 log_info "Step 4/5: Generating configuration file (${CONFIG_OUT})..."
 CONFIG_DIR="$(dirname "$CONFIG_OUT")"
 
@@ -517,10 +517,7 @@ for i in "${!PC_IDS[@]}"; do
     pc_host_esc="$(json_escape "${PC_HOSTS[$i]}")"
     pc_port="${PC_PORTS[$i]}"
 
-    entry="    { \"id\": \"${pc_id_esc}\", \"host\": \"${pc_host_esc}\""
-    if [[ "$pc_user_val" != "$SSH_USER" ]]; then
-        entry+=", \"sshUser\": \"${pc_user_esc}\""
-    fi
+    entry="    { \"id\": \"${pc_id_esc}\", \"host\": \"${pc_host_esc}\", \"sshUser\": \"${pc_user_esc}\""
     if [[ "$pc_port" -ne 22 ]]; then
         entry+=", \"port\": ${pc_port}"
     fi
@@ -533,7 +530,7 @@ for i in "${!PC_IDS[@]}"; do
     fi
 done
 
-CONFIG_JSON="{
+FRESH_CONFIG_JSON="{
   \"sshUser\": \"$(json_escape "$SSH_USER")\",
   \"sshKeyPath\": \"$(json_escape "$KEY_PATH_CONFIG")\",
   \"knownHostsPath\": \"$(json_escape "$KNOWN_HOSTS_CONFIG")\",
@@ -553,6 +550,87 @@ CONFIG_JSON="{
 ${JSON_PCS}  ]
 }
 "
+
+if command -v python3 >/dev/null 2>&1; then
+    CONFIG_JSON="$(
+        FRESH_JSON="$FRESH_CONFIG_JSON" \
+        EXISTING_PATH="$CONFIG_OUT" \
+        python3 - <<'PY'
+import json
+import os
+import sys
+
+fresh = json.loads(os.environ["FRESH_JSON"])
+existing_path = os.environ["EXISTING_PATH"]
+
+if os.path.isfile(existing_path):
+    try:
+        with open(existing_path, "r", encoding="utf-8") as fh:
+            cfg = json.load(fh)
+        if not isinstance(cfg, dict):
+            raise ValueError("root is not an object")
+    except Exception as exc:
+        print(f"[ERROR] Existing config {existing_path} is not valid JSON: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    cfg.setdefault("sshUser", fresh["sshUser"])
+    cfg["sshKeyPath"] = fresh["sshKeyPath"]
+    cfg["knownHostsPath"] = fresh["knownHostsPath"]
+    cfg.setdefault("maxParallel", fresh["maxParallel"])
+    cfg.setdefault("paths", fresh["paths"])
+    cfg.setdefault("logs", fresh["logs"])
+    cfg.setdefault("ui", fresh["ui"])
+
+    existing_pcs = cfg.get("pcs")
+    if not isinstance(existing_pcs, list):
+        existing_pcs = []
+
+    default_user = cfg.get("sshUser", fresh["sshUser"])
+    by_id = {p.get("id"): idx for idx, p in enumerate(existing_pcs) if isinstance(p, dict) and "id" in p}
+
+    for new_pc in fresh["pcs"]:
+        pc_id = new_pc["id"]
+        pc_user = new_pc.pop("sshUser", default_user)
+        if pc_id in by_id:
+            target = existing_pcs[by_id[pc_id]]
+            target["host"] = new_pc["host"]
+            if "port" in new_pc:
+                target["port"] = new_pc["port"]
+            else:
+                target.pop("port", None)
+            if pc_user != default_user:
+                target["sshUser"] = pc_user
+            else:
+                target.pop("sshUser", None)
+        else:
+            entry = {"id": pc_id, "host": new_pc["host"]}
+            if pc_user != default_user:
+                entry["sshUser"] = pc_user
+            if "port" in new_pc:
+                entry["port"] = new_pc["port"]
+            existing_pcs.append(entry)
+            by_id[pc_id] = len(existing_pcs) - 1
+
+    cfg["pcs"] = existing_pcs
+else:
+    cfg = fresh
+    default_user = cfg["sshUser"]
+    for pc in cfg["pcs"]:
+        if pc.get("sshUser") == default_user:
+            pc.pop("sshUser", None)
+
+print(json.dumps(cfg, indent=2))
+PY
+    )"$'\n'
+    if [[ -f "$CONFIG_OUT" ]]; then
+        log_info "Existing ${CONFIG_OUT} detected — merging ${#PC_IDS[@]} PC(s) while preserving existing entries."
+    fi
+else
+    if [[ -f "$CONFIG_OUT" ]]; then
+        log_warn "python3 not found; overwriting existing ${CONFIG_OUT} instead of merging."
+    fi
+    CONFIG_JSON="$FRESH_CONFIG_JSON"
+fi
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
     log_dry "Would ensure directory ${CONFIG_DIR} exists (mode 0755)"
