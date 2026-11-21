@@ -537,7 +537,7 @@ FRESH_CONFIG_JSON="{
   \"maxParallel\": 2,
   \"paths\": {
     \"logs\": \".app\",
-    \"screenshots\": \"Pictures/lightshot\",
+    \"screenshots\": \"Pictures/lightshots\",
     \"recordings\": \"recordings\"
   },
   \"logs\": {

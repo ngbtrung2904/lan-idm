@@ -601,7 +601,7 @@ void TestCoreRemote::configStoreMediaPathsAndSupportsFlags() {
         })";
         QVERIFY2(ConfigStore::parseJson(json, &cfg, &err), qPrintable(err));
         QCOMPARE(cfg.paths.logs, QStringLiteral(".app"));
-        QCOMPARE(cfg.paths.screenshots, QStringLiteral("Pictures/lightshot"));
+        QCOMPARE(cfg.paths.screenshots, QStringLiteral("Pictures/lightshots"));
         QCOMPARE(cfg.paths.recordings, QStringLiteral("recordings"));
         QCOMPARE(cfg.pcs.size(), 2);
         QCOMPARE(cfg.pcs[0].supportsPictures, true);

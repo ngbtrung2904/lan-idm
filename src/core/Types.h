@@ -54,7 +54,7 @@ struct PcConfig {
 
 struct PathsConfig {
     QString logs = QStringLiteral(".app");
-    QString screenshots = QStringLiteral("Pictures/lightshot");
+    QString screenshots = QStringLiteral("Pictures/lightshots");
     QString recordings = QStringLiteral("recordings");
 };
 

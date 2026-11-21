@@ -5,7 +5,7 @@
   "maxParallel": 2,
   "paths": {
     "logs": ".app",
-    "screenshots": "Pictures/lightshot",
+    "screenshots": "Pictures/lightshots",
     "recordings": "recordings"
   },
   "logs": {
@@ -15,12 +15,120 @@
     "theme": "light"
   },
   "pcs": [
-    { "id": "pc01", "host": "192.168.10.11" },
-    { "id": "pc02", "host": "192.168.10.12" },
-    { "id": "pc03", "host": "192.168.10.13" },
-    { "id": "pc04", "host": "192.168.10.14" },
-    { "id": "pc05", "host": "192.168.10.15" },
-    { "id": "pc06", "host": "192.168.10.16" },
+    {
+      "id": "pc01",
+      "host": "192.168.10.11",
+      "supportsPictures": false,
+      "supportsRecordings": false,
+      "logSources": [
+        {
+          "name": "adsb-syslog",
+          "remotePath": ".app/adsb/syslog",
+          "destSubdir": "adsb/syslog",
+          "timestampSource": "mtime"
+        },
+        {
+          "name": "dioservice-syslog",
+          "remotePath": ".app/dioservice/syslog",
+          "destSubdir": "dioservice/syslog",
+          "timestampSource": "mtime"
+        }
+      ]
+    },
+    {
+      "id": "pc02",
+      "host": "192.168.10.12",
+      "supportsPictures": true,
+      "supportsRecordings": true,
+      "logSources": [
+        {
+          "name": "aesarddm-syslog",
+          "remotePath": ".app/aesarddm/syslog",
+          "destSubdir": "aesarddm/syslog",
+          "timestampSource": "mtime"
+        },
+        {
+          "name": "aesarddm-mdata",
+          "remotePath": ".app/aesarddm/mdata",
+          "destSubdir": "aesarddm/mdata",
+          "timestampSource": "mtime"
+        }
+      ]
+    },
+    {
+      "id": "pc03",
+      "host": "192.168.10.13",
+      "supportsPictures": true,
+      "supportsRecordings": true,
+      "logSources": [
+        {
+          "name": "aesarddm-syslog",
+          "remotePath": ".app/aesarddm/syslog",
+          "destSubdir": "aesarddm/syslog",
+          "timestampSource": "mtime"
+        },
+        {
+          "name": "aesarddm-mdata",
+          "remotePath": ".app/aesarddm/mdata",
+          "destSubdir": "aesarddm/mdata",
+          "timestampSource": "mtime"
+        }
+      ]
+    },
+    {
+      "id": "pc04",
+      "host": "192.168.10.14",
+      "supportsPictures": false,
+      "supportsRecordings": false,
+      "logSources": [
+        {
+          "name": "aesaxprotrain-syslog",
+          "remotePath": ".app/aesaxprotrain/syslog",
+          "destSubdir": "aesaxprotrain/syslog",
+          "timestampSource": "mtime"
+        }
+      ]
+    },
+    {
+      "id": "pc05",
+      "host": "192.168.10.15",
+      "supportsPictures": true,
+      "supportsRecordings": true,
+      "logSources": [
+        {
+          "name": "aesarddm-syslog",
+          "remotePath": ".app/aesarddm/syslog",
+          "destSubdir": "aesarddm/syslog",
+          "timestampSource": "mtime"
+        },
+        {
+          "name": "aesarddm-mdata",
+          "remotePath": ".app/aesarddm/mdata",
+          "destSubdir": "aesarddm/mdata",
+          "timestampSource": "mtime"
+        }
+      ]
+    },
+    {
+      "id": "pc06",
+      "host": "192.168.10.16",
+      "supportsPictures": false,
+      "supportsRecordings": false,
+      "logSources": [
+        {
+          "name": "adsb-syslog",
+          "remotePath": ".app/adsb/syslog",
+          "destSubdir": "adsb/syslog",
+          "timestampSource": "mtime"
+        },
+        {
+          "name": "dioservice-syslog",
+          "remotePath": ".app/dioservice/syslog",
+          "destSubdir": "dioservice/syslog",
+          "timestampSource": "mtime"
+        }
+      ]
+    },
     {
       "id": "pc07",
       "host": "192.168.10.17",
@@ -28,19 +136,30 @@
       "supportsRecordings": false,
       "logSources": [
         {
-          "name": "syslog",
+          "name": "aesardp-syslog",
           "remotePath": ".app/aesardp/syslog",
-          "destSubdir": "syslog",
+          "destSubdir": "aesardp/syslog",
           "timestampSource": "filename"
         },
         {
-          "name": "metadata",
-          "remotePath": "app/aesardp/metadata",
-          "destSubdir": "metadata",
+          "name": "aesardp-metadata",
+          "remotePath": ".app/aesardp/metadata",
+          "destSubdir": "aesardp/metadata",
+          "timestampSource": "filename"
+        },
+        {
+          "name": "aesarmm-syslog",
+          "remotePath": ".app/aesarmm/syslog",
+          "destSubdir": "aesarmm/syslog",
+          "timestampSource": "filename"
+        },
+        {
+          "name": "aesarmm-metadata",
+          "remotePath": ".app/aesarmm/metadata",
+          "destSubdir": "aesarmm/metadata",
           "timestampSource": "filename"
         }
       ]
     }
   ]
 }
-

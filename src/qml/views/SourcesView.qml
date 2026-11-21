@@ -310,7 +310,7 @@ ColumnLayout {
                                     }
 
                                     Text {
-                                        text: "~/Pictures/lightshot"
+                                        text: "~/Pictures/lightshots"
                                         font.family: Theme.fontMono
                                         font.pixelSize: 12
                                         color: Theme.muted
