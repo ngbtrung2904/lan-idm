@@ -13,7 +13,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SSH_USER="user"
-KEY_PATH_RAW="~/.ssh/collector_key"
+KEY_PATH_RAW="~/.local/share/DataCollector/collector_key"
 KNOWN_HOSTS_RAW="~/.local/share/DataCollector/known_hosts"
 CONFIG_OUT_RAW="~/.config/DataCollector/config.json"
 HOSTS_SPEC=""
@@ -32,6 +32,9 @@ cleanup() {
     if [[ -n "$TEMP_AGENT_DIR" && -d "$TEMP_AGENT_DIR" ]]; then
         rm -rf "$TEMP_AGENT_DIR"
     fi
+    if [[ -n "${KEY_PATH:-}" && -f "${KEY_PATH:-}.pub" ]]; then
+        ssh-add -d "${KEY_PATH}.pub" >/dev/null 2>&1 || true
+    fi
 }
 trap cleanup EXIT
 
@@ -49,7 +52,8 @@ Required:
 Options:
   --user <ssh_user>         Default SSH username on remote PCs when not specified in --hosts
                             (default: user)
-  --key-path <path>         Path to ed25519 collector key (default: ~/.ssh/collector_key)
+  --key-path <path>         Path to ed25519 collector key
+                            (default: ~/.local/share/DataCollector/collector_key)
   --known-hosts <path>      Path to Data Collector known_hosts file
                             (default: ~/.local/share/DataCollector/known_hosts)
   --config-out <path>       Path to write config.json

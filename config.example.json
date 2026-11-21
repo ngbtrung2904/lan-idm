@@ -1,6 +1,6 @@
 {
   "sshUser": "user",
-  "sshKeyPath": "~/.ssh/collector_key",
+  "sshKeyPath": "~/.local/share/DataCollector/collector_key",
   "knownHostsPath": "~/.local/share/DataCollector/known_hosts",
   "maxParallel": 2,
   "paths": {

@@ -22,7 +22,7 @@
    - **Key passphrase** — choose a strong one. You'll type it every time you open Data Collector.
    - **Host key fingerprint** — compare the `SHA256:...` shown on screen against the PC's actual fingerprint (run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256` on the PC). Type **y** only if they match.
 
-4. **After it finishes**: key pair generated at `~/.ssh/collector_key`, rsync installed on the PC, config written to `~/.config/DataCollector/config.json`, and a read-only probe runs — you should see **probe: OK**.
+4. **After it finishes**: key pair generated at `~/.local/share/DataCollector/collector_key`, rsync installed on the PC, config written to `~/.config/DataCollector/config.json`, and a read-only probe runs — you should see **probe: OK**.
    > **Note:** Check `config.example.json` for pc07-specific config differences (different log paths, no screenshots/recordings).
 
 ---
@@ -31,7 +31,7 @@
 
 Set up helper variables, then run 3 tests from the desktop:
 ```bash
-KEY=~/.ssh/collector_key; KH=~/.local/share/DataCollector/known_hosts
+KEY=~/.local/share/DataCollector/collector_key; KH=~/.local/share/DataCollector/known_hosts
 HOST=192.168.10.11
 SSH_OPTS="-i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KH"
 ```
@@ -91,6 +91,6 @@ sudo sshd -t && sudo systemctl reload ssh
 | `--timezone <tz>` | IANA timezone for all machines |
 | `--keep-password-auth` | Keep password login enabled — remove after testing |
 | `--dry-run` | Preview changes without modifying anything |
-| `--key-path <path>` | Custom key location (default: `~/.ssh/collector_key`) |
+| `--key-path <path>` | Custom key location (default: `~/.local/share/DataCollector/collector_key`) |
 
 For full details (manual setup, key rotation, host key changes), see [provisioning.md](provisioning.md).

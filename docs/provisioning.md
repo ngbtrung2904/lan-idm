@@ -72,7 +72,7 @@ Both scripts are idempotent and support `--dry-run`, which prints every command 
 ### Option A: Automated Setup from the Desktop (Recommended)
 
 `scripts/setup-desktop.sh` performs the complete setup in five steps:
-1. Generates a passphrase-protected `ed25519` key pair (`~/.ssh/collector_key`).
+1. Generates a passphrase-protected `ed25519` key pair (`~/.local/share/DataCollector/collector_key`).
 2. Scans each PC's SSH host key (`ssh-keyscan`), displays its **SHA256 fingerprint**, and asks you to verify and confirm before writing to `~/.local/share/DataCollector/known_hosts`. (Host keys are never auto-accepted.)
 3. Copies and runs `scripts/provision-pc.sh` on each PC (you enter the PC password / `sudo` password once during initial setup).
 4. Writes `~/.config/DataCollector/config.json`.
@@ -121,7 +121,7 @@ If you prefer to provision each PC directly (for example, via local console or a
    ```
    *(The final probe will report failures until the PCs are provisioned in step 2.)*
 
-2. Copy `scripts/provision-pc.sh` and `~/.ssh/collector_key.pub` to each PC, preview with `--dry-run`, then run:
+2. Copy `scripts/provision-pc.sh` and `~/.local/share/DataCollector/collector_key.pub` to each PC, preview with `--dry-run`, then run:
    ```bash
    # Preview first
    sudo ./provision-pc.sh \
@@ -159,7 +159,7 @@ If you prefer to provision each PC directly (for example, via local console or a
 |---|---|---|
 | `--hosts <id:[user@]host[:port],...>` | *(required)* | Comma-separated PC list (supports per-PC `user@host`, e.g. `pc01:user1@192.168.10.11,pc02:user2@192.168.10.12`) |
 | `--user <ssh_user>` | `user` | Default SSH username on remote PCs when `user@` is omitted in `--hosts` |
-| `--key-path <path>` | `~/.ssh/collector_key` | Path to ed25519 key pair |
+| `--key-path <path>` | `~/.local/share/DataCollector/collector_key` | Path to ed25519 key pair |
 | `--known-hosts <path>` | `~/.local/share/DataCollector/known_hosts` | App-dedicated `known_hosts` file |
 | `--config-out <path>` | `~/.config/DataCollector/config.json` | Output path for `config.json` |
 | `--timezone <tz>` | Desktop's current TZ | Timezone forwarded to `provision-pc.sh` |
@@ -176,7 +176,7 @@ After provisioning, confirm from the desktop that the collector key can **only**
 Set helper variables for one PC (e.g. `pc01` at `192.168.10.11`):
 
 ```bash
-KEY=~/.ssh/collector_key
+KEY=~/.local/share/DataCollector/collector_key
 KH=~/.local/share/DataCollector/known_hosts
 HOST=192.168.10.11
 SSH_OPTS="-i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KH"
@@ -248,7 +248,7 @@ If the collector key file is compromised, lost, or due for scheduled rotation:
    sudo sed -i '/rrsync -ro/d' /home/user/.ssh/authorized_keys
    ```
 2. **Generate a new key pair on the desktop:**
-   Move or securely delete the old key pair (`~/.ssh/collector_key` and `~/.ssh/collector_key.pub`), then run `scripts/setup-desktop.sh` (or `ssh-keygen -t ed25519 -a 64 -f ~/.ssh/collector_key`).
+   Move or securely delete the old key pair (`~/.local/share/DataCollector/collector_key` and `~/.local/share/DataCollector/collector_key.pub`), then run `scripts/setup-desktop.sh` (or `ssh-keygen -t ed25519 -a 64 -f ~/.local/share/DataCollector/collector_key`).
 3. **Install the new public key on every PC:**
    Re-run `scripts/provision-pc.sh --pubkey <new_key.pub> ...` on each PC (it replaces/appends idempotently) and verify with `rsync -d --list-only`.
 

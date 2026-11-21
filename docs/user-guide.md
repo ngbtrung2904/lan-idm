@@ -73,3 +73,52 @@ Data Collector copies application logs and screenshots from headless PCs onto a 
 
 - **Collected files on the USB drive are stored unencrypted.** Handle, transport, and store the USB drive in accordance with your site's data-handling and physical security policy.
 - Always click **Sign out** (or close Data Collector) when finished so the private SSH key agent is stopped immediately.
+
+---
+
+## 8. Rollback (`setup-desktop.sh` & Remote PCs)
+
+If you ran `scripts/setup-desktop.sh` and want to completely undo its changes on both the desktop and the remote PCs:
+
+### 8.1 Rollback on the Desktop
+
+Run on the desktop operator station:
+
+```bash
+# 1. Remove Data Collector config, known_hosts, and collector SSH key pair
+rm -rf ~/.config/DataCollector
+rm -rf ~/.local/share/DataCollector
+
+# 2. If an older run created collector_key inside ~/.ssh/, remove it too and clear from ssh-agent
+ssh-add -d ~/.ssh/collector_key.pub 2>/dev/null || true
+rm -f ~/.ssh/collector_key ~/.ssh/collector_key.pub
+```
+
+### 8.2 Rollback on Each Remote PC
+
+Run on each remote PC (via SSH if password/admin login is enabled, or via the PC's local monitor + keyboard console if password login was disabled):
+
+```bash
+# 1. Remove the Data Collector sshd drop-in (re-enables default SSH password authentication)
+sudo rm -f /etc/ssh/sshd_config.d/99-datacollector.conf
+sudo sshd -t && sudo systemctl reload ssh
+
+# 2. Remove the restricted rrsync key line from authorized_keys (replace <user> with the PC's Linux username)
+sudo sed -i '/rrsync -ro/d' /home/<user>/.ssh/authorized_keys
+
+# 3. (Optional) Remove /usr/local/bin/rrsync if provision-pc.sh extracted it from rsync docs
+sudo rm -f /usr/local/bin/rrsync
+
+# 4. (Optional) Restore timezone if you want a different timezone than the one set during provisioning
+# sudo timedatectl set-timezone <Original/Timezone>
+```
+
+*(Note: `openssh-server` and `rsync` are standard system packages and are normally left installed. No application logs, pictures, or recordings are ever modified by setup or rollback.)*
+
+### 8.3 Verify Rollback
+
+From the desktop:
+```bash
+# Normal password SSH should prompt for password and open a shell
+ssh <user>@<pc_ip>
+```
