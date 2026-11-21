@@ -1,6 +1,6 @@
 # Data Collector — Quick-Start Provisioning Guide
 
-**Prerequisites:** Ubuntu 22.04+ on all machines, LAN connectivity, `sudo` access on each PC. The scripts sync timezone and NTP automatically.
+**Prerequisites:** Ubuntu 22.04+ on all machines, LAN connectivity, `sudo` access on each PC, and PTP time synchronization active. The scripts align the timezone across all PCs without touching PTP or installing `systemd-timesyncd`.
 
 ---
 

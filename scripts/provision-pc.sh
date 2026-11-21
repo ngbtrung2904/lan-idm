@@ -2,7 +2,8 @@
 # provision-pc.sh — Provision a headless Ubuntu PC for read-only Data Collector access.
 #
 # Configures OpenSSH, rsync + rrsync, a restricted authorized_keys entry
-# (command="<rrsync> -ro /home/<user>",restrict), sshd hardening, timezone, and NTP.
+# (command="<rrsync> -ro /home/<user>",restrict), sshd hardening, and timezone.
+# (Does not install or enable systemd-timesyncd/NTP, so PTP time sync is undisturbed.)
 #
 # Idempotent and safe. Use --dry-run to preview all changes without modifying the system.
 
@@ -205,9 +206,9 @@ else
 fi
 
 # --- Step 1: Install required packages ---
-log_info "Step 1/5: Checking required packages (openssh-server, rsync, systemd-timesyncd)..."
+log_info "Step 1/5: Checking required packages (openssh-server, rsync)..."
 MISSING_PKGS=()
-for pkg in openssh-server rsync systemd-timesyncd; do
+for pkg in openssh-server rsync; do
     if ! dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q '^install ok installed$'; then
         MISSING_PKGS+=("$pkg")
     fi
@@ -405,8 +406,8 @@ else
     fi
 fi
 
-# --- Step 5: Configure timezone and NTP ---
-log_info "Step 5/5: Configuring timezone (${TIMEZONE}) and NTP synchronization..."
+# --- Step 5: Configure timezone ---
+log_info "Step 5/5: Configuring timezone (${TIMEZONE}) (leaving PTP time sync untouched)..."
 
 CURRENT_TZ=""
 if command -v timedatectl >/dev/null 2>&1; then
@@ -418,9 +419,6 @@ if [[ "$CURRENT_TZ" == "$TIMEZONE" ]]; then
 else
     run_cmd timedatectl set-timezone "$TIMEZONE"
 fi
-
-run_cmd timedatectl set-ntp true
-run_cmd systemctl enable --now systemd-timesyncd
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
     log_info "Dry-run complete. No changes were applied."

@@ -13,7 +13,7 @@ No custom daemon or service runs on the remote PCs. Access is enforced solely by
 | Custom collector agent/service | **No** | Nothing custom is installed on the PCs. |
 | `openssh-server` (OpenSSH 8+) | **Yes** | Required for SSH key transport (`scripts/provision-pc.sh` installs it). |
 | `rsync` 3.1+ & `rrsync` | **Yes** | Required for read-only listing and transfer (`scripts/provision-pc.sh` installs `rsync` and ensures `/usr/bin/rrsync` or `/usr/local/bin/rrsync` exists). |
-| `systemd-timesyncd` (NTP) & timezone | **Yes** | Desktop and all 7 PCs must share the exact same timezone with NTP active (Section 2). |
+| Timezone alignment (PTP untouched) | **Yes** | Desktop and all 7 PCs must share the exact same timezone (Section 2). `systemd-timesyncd` / NTP is **not** installed or enabled so existing PTP time sync is undisturbed. |
 | Restricted `authorized_keys` line | **Yes** | `command="/usr/bin/rrsync -ro /home/<user>",restrict <pubkey>` in `/home/<user>/.ssh/authorized_keys` (handles all paths under `/home/<user>`, including `pc07`'s `.app/aesardp/syslog` and `app/aesardp/metadata`, and `pc01`–`pc06`'s `Pictures/lightshot` and `recordings`). |
 | Disable SSH password auth | **Yes** (after testing) | `/etc/ssh/sshd_config.d/99-datacollector.conf` (`PasswordAuthentication no`). |
 | Extra changes for `pc07` or media folders | **No** | Because `rrsync -ro /home/<user>` covers the entire user home directory, **no special remote setup is needed** for `pc07` or for `Pictures/lightshot` / `recordings`. Only the desktop `config.json` differs for `pc07`. |
@@ -37,33 +37,30 @@ Ensure all 8 machines (1 desktop + 7 headless PCs) meet these requirements befor
 
 ---
 
-## 2. Timezone and NTP Synchronization Requirement
+## 2. Timezone Alignment and PTP Time Synchronization
 
-> **CRITICAL:** The desktop and all 7 PCs **MUST** be configured with the **exact same IANA timezone** and have **NTP enabled** (`systemd-timesyncd`).
+> **CRITICAL:** The desktop and all 7 PCs **MUST** be configured with the **exact same IANA timezone** and remain synchronized (via your existing **PTP** setup). `scripts/provision-pc.sh` does **not** install `systemd-timesyncd` or enable NTP, so it will never interfere with PTP.
 
 ### Why this is mandatory
 
-1. Because the collector SSH key is locked to `rrsync -ro`, Data Collector cannot run remote `find` commands. Instead, it lists files with `rsync -r --list-only --no-human-readable` and filters by modification time (`mtime`) on the desktop.
+1. Because the collector SSH key is locked to `rrsync -ro`, Data Collector cannot run remote `find` commands. Instead, it lists files with `rsync -r --list-only --no-human-readable` and filters by modification time (`mtime`) or filename timestamps on the desktop.
 2. `rsync --list-only` prints timestamps in each **PC's local timezone without a UTC offset** (e.g. `2026/05/12 14:30:00`), and Data Collector parses them in the **desktop's local timezone**.
 3. If a PC's timezone differs from the desktop's timezone (or its clock drifts), every file on that PC will be shifted relative to the operator's selected Start/End window — causing missed files or unexpected extra files.
 
-### Setting and verifying time sync
+### Setting and verifying timezone
 
 Pick one timezone for the entire fleet (for example `UTC` or your local timezone such as `Asia/Ho_Chi_Minh`) and apply it to the desktop first:
 
 ```bash
 sudo timedatectl set-timezone Asia/Ho_Chi_Minh
-sudo timedatectl set-ntp true
 ```
 
-`scripts/provision-pc.sh` applies the same `--timezone` and enables `systemd-timesyncd` on every PC. Verify synchronization on the desktop and each PC:
+`scripts/provision-pc.sh` applies the same `--timezone` on every PC without modifying PTP or enabling NTP. Verify timezone alignment on the desktop and each PC:
 
 ```bash
 timedatectl status
 # Confirm:
 #   Time zone: Asia/Ho_Chi_Minh (+07, +0700)   <-- identical on all 8 machines
-#   System clock synchronized: yes
-#   NTP service: active
 ```
 
 ---
