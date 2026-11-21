@@ -634,7 +634,7 @@ void TransferEngine::startStage(int index,
     const QString sshCmd = SshOptions::buildRsyncSshCommand(sshParams);
 
     const QString remoteSpec = QStringLiteral("%1@%2:%3")
-                                   .arg(mConfig.sshUser,
+                                   .arg(resolveSshUser(job.spec.pc, mConfig.sshUser),
                                         job.spec.pc.host,
                                         normalizeRemoteDir(remoteRelDir));
     const QString destWithSlash = destDir.endsWith(QLatin1Char('/'))

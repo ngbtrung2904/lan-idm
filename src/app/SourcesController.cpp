@@ -631,7 +631,7 @@ void SourcesController::startCopy() {
             spec.pc = mConfig.pcs[i];
         } else {
             spec.pc = PcConfig{pcItem.id, pcItem.host, pcItem.port, {},
-                               pcItem.supportsPictures, pcItem.supportsRecordings};
+                               pcItem.supportsPictures, pcItem.supportsRecordings, QString()};
         }
 
         if (pcItem.selectable() && pcItem.selected) {
@@ -676,7 +676,7 @@ void SourcesController::dispatchNextProbes() {
         }
         const PcConfig &pc = mConfig.pcs.at(row);
         ++mActiveProbes;
-        mHostProbe.probe(pc, mConfig.sshUser, buildSshParams(pc.port));
+        mHostProbe.probe(pc, resolveSshUser(pc, mConfig.sshUser), buildSshParams(pc.port));
     }
     updateBusyState();
 }
@@ -701,7 +701,7 @@ void SourcesController::onProbeFinished(const QString &pcId, dc::PcState state, 
                 const PcConfig &pc = mConfig.pcs.at(row);
                 ++mActiveListings;
                 mRsyncLister.listPc(pc,
-                                    mConfig.sshUser,
+                                    resolveSshUser(pc, mConfig.sshUser),
                                     resolveLogSources(pc, mConfig.paths),
                                     mConfig.paths.screenshots,
                                     mConfig.paths.recordings,

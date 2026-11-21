@@ -42,11 +42,13 @@ Usage: setup-desktop.sh --hosts <id:host[:port],...> [OPTIONS]
 Set up the Ubuntu desktop operator station for Data Collector.
 
 Required:
-  --hosts <spec>            Comma-separated list of PCs in id:host or id:host:port format.
-                            Example: pc01:192.168.10.11,pc02:192.168.10.12
+  --hosts <spec>            Comma-separated list of PCs in id:[user@]host[:port] format.
+                            Example (same user): pc01:192.168.10.11,pc02:192.168.10.12
+                            Example (per-PC user): pc01:user1@192.168.10.11,pc02:user2@192.168.10.12
 
 Options:
-  --user <ssh_user>         SSH username on the remote PCs (default: user)
+  --user <ssh_user>         Default SSH username on remote PCs when not specified in --hosts
+                            (default: user)
   --key-path <path>         Path to ed25519 collector key (default: ~/.ssh/collector_key)
   --known-hosts <path>      Path to Data Collector known_hosts file
                             (default: ~/.local/share/DataCollector/known_hosts)
@@ -228,6 +230,7 @@ fi
 
 # Parse --hosts into parallel arrays
 PC_IDS=()
+PC_USERS=()
 PC_HOSTS=()
 PC_PORTS=()
 
@@ -242,16 +245,28 @@ for item in "${HOST_ITEMS[@]}"; do
 
     IFS=':' read -r -a parts <<< "$item"
     if [[ "${#parts[@]}" -lt 2 || "${#parts[@]}" -gt 3 ]]; then
-        log_err "Invalid host entry '${item}'. Expected format: id:host or id:host:port"
+        log_err "Invalid host entry '${item}'. Expected format: id:[user@]host or id:[user@]host:port"
         exit 2
     fi
 
     pc_id="${parts[0]}"
-    pc_host="${parts[1]}"
+    pc_user_host="${parts[1]}"
     pc_port="${parts[2]:-22}"
+
+    if [[ "$pc_user_host" == *"@"* ]]; then
+        pc_user="${pc_user_host%%@*}"
+        pc_host="${pc_user_host#*@}"
+    else
+        pc_user="$SSH_USER"
+        pc_host="$pc_user_host"
+    fi
 
     if [[ ! "$pc_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
         log_err "Invalid PC id '${pc_id}' in '${item}'."
+        exit 2
+    fi
+    if [[ ! "$pc_user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
+        log_err "Invalid SSH username '${pc_user}' in '${item}'."
         exit 2
     fi
     if [[ -z "$pc_host" || "$pc_host" =~ [[:space:]] ]]; then
@@ -264,6 +279,7 @@ for item in "${HOST_ITEMS[@]}"; do
     fi
 
     PC_IDS+=("$pc_id")
+    PC_USERS+=("$pc_user")
     PC_HOSTS+=("$pc_host")
     PC_PORTS+=("$pc_port")
 done
@@ -404,19 +420,21 @@ else
     if [[ "$DRY_RUN" -eq 1 ]]; then
         for i in "${!PC_IDS[@]}"; do
             pc_id="${PC_IDS[$i]}"
+            pc_user="${PC_USERS[$i]}"
             pc_host="${PC_HOSTS[$i]}"
             pc_port="${PC_PORTS[$i]}"
-            log_dry "Host ${pc_id} (${pc_host}:${pc_port}):"
+            log_dry "Host ${pc_id} (${pc_user}@${pc_host}:${pc_port}):"
             log_dry "  Would copy ${PROVISION_SCRIPT} via scp -P ${pc_port} -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS}"
-            log_dry "  Would run remotely via ssh -t -p ${pc_port} -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS} ${SSH_USER}@${pc_host}:"
-            log_dry "    sudo bash /tmp/provision-pc.sh --user ${SSH_USER} --pubkey <contents of ${KEY_PATH}.pub> --timezone ${TIMEZONE} ${PROVISION_AUTH_FLAG}"
+            log_dry "  Would run remotely via ssh -t -p ${pc_port} -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS} ${pc_user}@${pc_host}:"
+            log_dry "    sudo bash /tmp/provision-pc.sh --user ${pc_user} --pubkey <contents of ${KEY_PATH}.pub> --timezone ${TIMEZONE} ${PROVISION_AUTH_FLAG}"
         done
     else
         for i in "${!PC_IDS[@]}"; do
             pc_id="${PC_IDS[$i]}"
+            pc_user="${PC_USERS[$i]}"
             pc_host="${PC_HOSTS[$i]}"
             pc_port="${PC_PORTS[$i]}"
-            log_info "Provisioning ${pc_id} (${SSH_USER}@${pc_host}:${pc_port})... (enter password / sudo password if prompted)"
+            log_info "Provisioning ${pc_id} (${pc_user}@${pc_host}:${pc_port})... (enter password / sudo password if prompted)"
 
             REMOTE_TMP_SCRIPT="/tmp/datacollector-provision-pc-$$.sh"
             REMOTE_TMP_PUB="/tmp/datacollector-pubkey-$$.pub"
@@ -431,7 +449,7 @@ else
                 -o ControlMaster=auto \
                 -o ControlPath="$CTRL_SOCK" \
                 -o ControlPersist=30 \
-                "$PROVISION_SCRIPT" "${SSH_USER}@${pc_host}:${REMOTE_TMP_SCRIPT}"
+                "$PROVISION_SCRIPT" "${pc_user}@${pc_host}:${REMOTE_TMP_SCRIPT}"
 
             scp -P "$pc_port" \
                 -o StrictHostKeyChecking=yes \
@@ -440,7 +458,7 @@ else
                 -o ControlMaster=auto \
                 -o ControlPath="$CTRL_SOCK" \
                 -o ControlPersist=30 \
-                "${KEY_PATH}.pub" "${SSH_USER}@${pc_host}:${REMOTE_TMP_PUB}"
+                "${KEY_PATH}.pub" "${pc_user}@${pc_host}:${REMOTE_TMP_PUB}"
 
             set +e
             ssh -t -p "$pc_port" \
@@ -449,16 +467,16 @@ else
                 -o ConnectTimeout=10 \
                 -o ControlMaster=auto \
                 -o ControlPath="$CTRL_SOCK" \
-                "${SSH_USER}@${pc_host}" \
-                "sudo bash '${REMOTE_TMP_SCRIPT}' --user '${SSH_USER}' --pubkey '${REMOTE_TMP_PUB}' --timezone '${TIMEZONE}' '${PROVISION_AUTH_FLAG}'; rc=\$?; rm -f '${REMOTE_TMP_SCRIPT}' '${REMOTE_TMP_PUB}'; exit \$rc"
+                "${pc_user}@${pc_host}" \
+                "sudo bash '${REMOTE_TMP_SCRIPT}' --user '${pc_user}' --pubkey '${REMOTE_TMP_PUB}' --timezone '${TIMEZONE}' '${PROVISION_AUTH_FLAG}'; rc=\$?; rm -f '${REMOTE_TMP_SCRIPT}' '${REMOTE_TMP_PUB}'; exit \$rc"
             SSH_RC=$?
             set -e
 
-            ssh -O exit -o ControlPath="$CTRL_SOCK" "${SSH_USER}@${pc_host}" 2>/dev/null || true
+            ssh -O exit -o ControlPath="$CTRL_SOCK" "${pc_user}@${pc_host}" 2>/dev/null || true
             rm -rf "$CTRL_DIR"
 
             if [[ "$SSH_RC" -ne 0 ]]; then
-                log_err "Remote provisioning failed on ${pc_id} (${pc_host}:${pc_port}) with exit code ${SSH_RC}."
+                log_err "Remote provisioning failed on ${pc_id} (${pc_user}@${pc_host}:${pc_port}) with exit code ${SSH_RC}."
                 exit "$SSH_RC"
             fi
         done
@@ -473,14 +491,19 @@ CONFIG_DIR="$(dirname "$CONFIG_OUT")"
 JSON_PCS=""
 for i in "${!PC_IDS[@]}"; do
     pc_id_esc="$(json_escape "${PC_IDS[$i]}")"
+    pc_user_val="${PC_USERS[$i]}"
+    pc_user_esc="$(json_escape "$pc_user_val")"
     pc_host_esc="$(json_escape "${PC_HOSTS[$i]}")"
     pc_port="${PC_PORTS[$i]}"
 
-    if [[ "$pc_port" -eq 22 ]]; then
-        entry="    { \"id\": \"${pc_id_esc}\", \"host\": \"${pc_host_esc}\" }"
-    else
-        entry="    { \"id\": \"${pc_id_esc}\", \"host\": \"${pc_host_esc}\", \"port\": ${pc_port} }"
+    entry="    { \"id\": \"${pc_id_esc}\", \"host\": \"${pc_host_esc}\""
+    if [[ "$pc_user_val" != "$SSH_USER" ]]; then
+        entry+=", \"sshUser\": \"${pc_user_esc}\""
     fi
+    if [[ "$pc_port" -ne 22 ]]; then
+        entry+=", \"port\": ${pc_port}"
+    fi
+    entry+=" }"
 
     if [[ "$i" -lt $((${#PC_IDS[@]} - 1)) ]]; then
         JSON_PCS+="${entry},"$'\n'
@@ -496,7 +519,8 @@ CONFIG_JSON="{
   \"maxParallel\": 2,
   \"paths\": {
     \"logs\": \".app\",
-    \"screenshots\": \"screenshot\"
+    \"screenshots\": \"Pictures/lightshot\",
+    \"recordings\": \"recordings\"
   },
   \"logs\": {
     \"includeModifiedAfterEnd\": true
@@ -528,10 +552,11 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     log_dry "Would start a temporary ssh-agent and run: ssh-add $(printf '%q' "$KEY_PATH") (one passphrase prompt)"
     for i in "${!PC_IDS[@]}"; do
         pc_id="${PC_IDS[$i]}"
+        pc_user="${PC_USERS[$i]}"
         pc_host="${PC_HOSTS[$i]}"
         pc_port="${PC_PORTS[$i]}"
         SSH_OPTS="ssh -p ${pc_port} -i ${KEY_PATH} -o BatchMode=yes -o ConnectTimeout=5 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS} -o IdentitiesOnly=yes -o IdentityAgent=<temp-agent-sock>"
-        log_dry "Would probe ${pc_id}: rsync -d --list-only -e \"${SSH_OPTS}\" ${SSH_USER}@${pc_host}:./"
+        log_dry "Would probe ${pc_id}: rsync -d --list-only -e \"${SSH_OPTS}\" ${pc_user}@${pc_host}:./"
     done
     log_dry "Would stop temporary ssh-agent on exit."
     log_info "Dry-run complete. No changes were applied."
@@ -551,15 +576,16 @@ SSH_AUTH_SOCK="$TEMP_AGENT_SOCK" ssh-add "$KEY_PATH"
 PROBE_FAILURES=0
 for i in "${!PC_IDS[@]}"; do
     pc_id="${PC_IDS[$i]}"
+    pc_user="${PC_USERS[$i]}"
     pc_host="${PC_HOSTS[$i]}"
     pc_port="${PC_PORTS[$i]}"
 
     SSH_CMD="ssh -p ${pc_port} -i ${KEY_PATH} -o BatchMode=yes -o ConnectTimeout=5 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS} -o IdentitiesOnly=yes -o IdentityAgent=${TEMP_AGENT_SOCK}"
 
-    if rsync -d --list-only -e "$SSH_CMD" "${SSH_USER}@${pc_host}:./" >/dev/null 2>&1; then
-        log_info "[OK]   ${pc_id} (${pc_host}:${pc_port}) — read-only rsync probe succeeded."
+    if rsync -d --list-only -e "$SSH_CMD" "${pc_user}@${pc_host}:./" >/dev/null 2>&1; then
+        log_info "[OK]   ${pc_id} (${pc_user}@${pc_host}:${pc_port}) — read-only rsync probe succeeded."
     else
-        log_err "[FAIL] ${pc_id} (${pc_host}:${pc_port}) — read-only rsync probe failed."
+        log_err "[FAIL] ${pc_id} (${pc_user}@${pc_host}:${pc_port}) — read-only rsync probe failed."
         PROBE_FAILURES=$((PROBE_FAILURES + 1))
     fi
 done

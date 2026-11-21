@@ -267,6 +267,15 @@ bool ConfigStore::parseJson(const QByteArray &jsonData, AppConfig *outConfig, QS
             pc.port = port;
         }
 
+        if (po.contains(QStringLiteral("sshUser"))) {
+            const QJsonValue uVal = po.value(QStringLiteral("sshUser"));
+            if (!uVal.isString() || uVal.toString().trimmed().isEmpty()) {
+                setError(error, QStringLiteral("Missing or invalid key: pcs[%1].sshUser").arg(i));
+                return false;
+            }
+            pc.sshUser = uVal.toString().trimmed();
+        }
+
         if (po.contains(QStringLiteral("supportsPictures"))) {
             const QJsonValue spVal = po.value(QStringLiteral("supportsPictures"));
             if (!spVal.isBool()) {

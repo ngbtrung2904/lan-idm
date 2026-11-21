@@ -157,8 +157,8 @@ If you prefer to provision each PC directly (for example, via local console or a
 
 | Flag | Default | Description |
 |---|---|---|
-| `--hosts <id:host[:port],...>` | *(required)* | Comma-separated PC list (port defaults to 22) |
-| `--user <ssh_user>` | `user` | SSH username on remote PCs |
+| `--hosts <id:[user@]host[:port],...>` | *(required)* | Comma-separated PC list (supports per-PC `user@host`, e.g. `pc01:user1@192.168.10.11,pc02:user2@192.168.10.12`) |
+| `--user <ssh_user>` | `user` | Default SSH username on remote PCs when `user@` is omitted in `--hosts` |
 | `--key-path <path>` | `~/.ssh/collector_key` | Path to ed25519 key pair |
 | `--known-hosts <path>` | `~/.local/share/DataCollector/known_hosts` | App-dedicated `known_hosts` file |
 | `--config-out <path>` | `~/.config/DataCollector/config.json` | Output path for `config.json` |

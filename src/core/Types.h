@@ -49,6 +49,7 @@ struct PcConfig {
     QVector<LogSourceConfig> logSources;
     bool supportsPictures = true;
     bool supportsRecordings = true;
+    QString sshUser;
 };
 
 struct PathsConfig {
@@ -140,6 +141,10 @@ struct PcTransferResult {
     int recordingsRsyncExitCode = -1;
     QStringList errors;
 };
+
+inline QString resolveSshUser(const PcConfig &pc, const QString &defaultSshUser) {
+    return pc.sshUser.isEmpty() ? defaultSshUser : pc.sshUser;
+}
 
 inline QVector<LogSourceConfig> resolveLogSources(const PcConfig &pc,
                                                   const PathsConfig &defaultPaths) {
