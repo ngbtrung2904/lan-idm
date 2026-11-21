@@ -546,6 +546,9 @@ CONFIG_JSON="{
   \"logs\": {
     \"includeModifiedAfterEnd\": true
   },
+  \"ui\": {
+    \"theme\": \"light\"
+  },
   \"pcs\": [
 ${JSON_PCS}  ]
 }

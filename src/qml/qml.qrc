@@ -10,6 +10,7 @@
         <file>components/StatusChip.qml</file>
         <file>components/AlertBanner.qml</file>
         <file>components/DateTimeField.qml</file>
+        <file>components/ThemeToggleButton.qml</file>
         <file>components/AppHeader.qml</file>
         <file>views/LoginView.qml</file>
         <file>views/SourcesView.qml</file>

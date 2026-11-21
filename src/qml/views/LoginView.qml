@@ -62,10 +62,12 @@ Item {
                         width: 22
                         height: 22
                         anchors.verticalCenter: parent.verticalCenter
+                        property color strokeColor: Theme.darkAccent
+                        onStrokeColorChanged: requestPaint()
                         onPaint: {
                             var ctx = getContext("2d");
                             ctx.clearRect(0, 0, width, height);
-                            ctx.strokeStyle = Theme.darkAccent;
+                            ctx.strokeStyle = strokeColor;
                             ctx.lineWidth = 2.2;
                             ctx.lineCap = "round";
                             ctx.lineJoin = "round";
@@ -153,7 +155,7 @@ Item {
                                 text: qsTr("Logs")
                                 font.family: Theme.fontSans
                                 font.pixelSize: 14
-                                color: "#E2E8F0"
+                                color: Theme.darkText
                             }
 
                             Item { Layout.fillWidth: true }
@@ -162,7 +164,7 @@ Item {
                                 text: authController.logsDisplayPath
                                 font.family: Theme.fontMono
                                 font.pixelSize: 13
-                                color: "#CBD5E1"
+                                color: Theme.darkMono
                                 elide: Text.ElideMiddle
                             }
                         }
@@ -184,7 +186,7 @@ Item {
                                 text: qsTr("Screenshots")
                                 font.family: Theme.fontSans
                                 font.pixelSize: 14
-                                color: "#E2E8F0"
+                                color: Theme.darkText
                             }
 
                             Item { Layout.fillWidth: true }
@@ -193,7 +195,7 @@ Item {
                                 text: authController.screenshotsDisplayPath
                                 font.family: Theme.fontMono
                                 font.pixelSize: 13
-                                color: "#CBD5E1"
+                                color: Theme.darkMono
                                 elide: Text.ElideMiddle
                             }
                         }
@@ -202,12 +204,19 @@ Item {
             }
         }
 
-        // Right light panel with centered Sign in card
+        // Right panel with theme toggle and centered Sign in card
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: loginView.stacked ? parent.width : parent.width * 0.53
             color: Theme.bg
+
+            ThemeToggleButton {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: 20
+                anchors.rightMargin: 24
+            }
 
             Rectangle {
                 id: signInCard
@@ -284,15 +293,15 @@ Item {
                                 anchors.margins: -3
                                 radius: Theme.radiusControl + 2
                                 color: "transparent"
-                                border.color: Theme.primary
+                                border.color: Theme.focusRing
                                 border.width: Theme.focusRingWidth
                                 visible: operatorField.activeFocus
                             }
                             Rectangle {
                                 anchors.fill: parent
                                 radius: Theme.radiusControl
-                                color: Theme.panel
-                                border.color: operatorField.activeFocus ? Theme.primary : Theme.border
+                                color: Theme.inputBg
+                                border.color: operatorField.activeFocus ? Theme.focusRing : Theme.inputBorder
                                 border.width: 1
                             }
                         }
@@ -336,15 +345,15 @@ Item {
                                 anchors.margins: -3
                                 radius: Theme.radiusControl + 2
                                 color: "transparent"
-                                border.color: Theme.primary
+                                border.color: Theme.focusRing
                                 border.width: Theme.focusRingWidth
                                 visible: passphraseField.activeFocus
                             }
                             Rectangle {
                                 anchors.fill: parent
                                 radius: Theme.radiusControl
-                                color: Theme.panel
-                                border.color: passphraseField.activeFocus ? Theme.primary : Theme.border
+                                color: Theme.inputBg
+                                border.color: passphraseField.activeFocus ? Theme.focusRing : Theme.inputBorder
                                 border.width: 1
                             }
                         }
@@ -361,10 +370,12 @@ Item {
                             width: 14
                             height: 14
                             Layout.alignment: Qt.AlignVCenter
+                            property color strokeColor: Theme.muted
+                            onStrokeColorChanged: requestPaint()
                             onPaint: {
                                 var ctx = getContext("2d");
                                 ctx.clearRect(0, 0, width, height);
-                                ctx.strokeStyle = Theme.muted;
+                                ctx.strokeStyle = strokeColor;
                                 ctx.lineWidth = 1.3;
                                 ctx.beginPath();
                                 ctx.roundedRect(2.5, 6.5, 9, 6, 1.5, 1.5);

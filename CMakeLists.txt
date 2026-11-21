@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(DataCollector VERSION 0.3.0 LANGUAGES CXX)
+project(DataCollector VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,6 +50,8 @@ install(
     FILES config.example.json
           docs/user-guide.md
           docs/provisioning.md
+          resources/fonts/Inter-OFL.txt
+          resources/fonts/JetBrainsMono-OFL.txt
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/data-collector"
 )
 

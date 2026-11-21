@@ -26,7 +26,7 @@ Button {
             anchors.margins: -3
             radius: Theme.radiusControl + 2
             color: "transparent"
-            border.color: Theme.primary
+            border.color: Theme.focusRing
             border.width: Theme.focusRingWidth
             visible: control.activeFocus
         }
@@ -41,7 +41,7 @@ Button {
                      : control.hovered
                        ? Theme.primaryHover
                        : Theme.primary
-            border.color: !control.enabled ? Theme.border : "transparent"
+            border.color: !control.enabled ? Theme.disabledBorder : "transparent"
             border.width: !control.enabled ? 1 : 0
         }
     }
@@ -63,7 +63,7 @@ Button {
             font.family: Theme.fontSans
             font.pixelSize: 14
             font.weight: Font.DemiBold
-            color: control.enabled ? "#FFFFFF" : Theme.disabledText
+            color: control.enabled ? Theme.textOnPrimary : Theme.disabledText
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             anchors.verticalCenter: parent.verticalCenter

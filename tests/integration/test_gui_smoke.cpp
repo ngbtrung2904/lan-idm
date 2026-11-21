@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontDatabase>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -27,7 +28,7 @@ public:
     TestGuiSmoke() = default;
 
 private slots:
-    void initTestCase();
+    void testBundledFontsLoaded();
     void testEndToEndControllerFlow();
 
 private:
@@ -35,10 +36,52 @@ private:
     AppConfig mConfig;
 };
 
-void TestGuiSmoke::initTestCase() {
+void TestGuiSmoke::testBundledFontsLoaded() {
+    static const char *const kFontPaths[] = {
+        ":/fonts/Inter-Regular.ttf",
+        ":/fonts/Inter-Medium.ttf",
+        ":/fonts/Inter-SemiBold.ttf",
+        ":/fonts/JetBrainsMono-Regular.ttf"
+    };
+
+    QStringList loadedFamilies;
+    for (const char *fontPath : kFontPaths) {
+        const int fontId = QFontDatabase::addApplicationFont(QString::fromLatin1(fontPath));
+        QVERIFY2(fontId >= 0, qPrintable(QStringLiteral("Failed to load bundled font: %1")
+                                             .arg(QString::fromLatin1(fontPath))));
+        loadedFamilies.append(QFontDatabase::applicationFontFamilies(fontId));
+    }
+
+    QVERIFY2(loadedFamilies.contains(QStringLiteral("Inter")),
+             qPrintable(QStringLiteral("Expected 'Inter' in applicationFontFamilies, got: %1")
+                            .arg(loadedFamilies.join(QStringLiteral(", ")))));
+    QVERIFY2(loadedFamilies.contains(QStringLiteral("JetBrains Mono")),
+             qPrintable(QStringLiteral("Expected 'JetBrains Mono' in applicationFontFamilies, got: %1")
+                            .arg(loadedFamilies.join(QStringLiteral(", ")))));
+
+    // Qt appends " [<foundry>]" in QFontDatabase::families() when multiple foundries
+    // provide the same family (e.g. bundled TTF + system-installed font).
+    const QStringList families = QFontDatabase::families();
+    auto hasFamily = [&families](const QString &target) {
+        const QString disambiguatedPrefix = target + QStringLiteral(" [");
+        for (const QString &f : families) {
+            if (f == target || f.startsWith(disambiguatedPrefix)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    QVERIFY2(hasFamily(QStringLiteral("Inter")),
+             qPrintable(QStringLiteral("Expected 'Inter' in QFontDatabase::families()")));
+    QVERIFY2(hasFamily(QStringLiteral("JetBrains Mono")),
+             qPrintable(QStringLiteral("Expected 'JetBrains Mono' in QFontDatabase::families()")));
+}
+
+void TestGuiSmoke::testEndToEndControllerFlow() {
     mFleetDir = qEnvironmentVariable("DC_FAKE_FLEET_DIR").trimmed();
     if (mFleetDir.isEmpty()) {
-        QSKIP("DC_FAKE_FLEET_DIR is not set; skipping GUI smoke test.");
+        QSKIP("DC_FAKE_FLEET_DIR is not set; skipping end-to-end controller flow.");
     }
 
     const QString configPath = QDir(mFleetDir).filePath(QStringLiteral("config.json"));
@@ -48,9 +91,7 @@ void TestGuiSmoke::initTestCase() {
     QString err;
     QVERIFY2(ConfigStore::load(configPath, &mConfig, &err), qPrintable(err));
     QCOMPARE(mConfig.pcs.size(), 6);
-}
 
-void TestGuiSmoke::testEndToEndControllerFlow() {
     QTemporaryDir usbDir;
     QVERIFY(usbDir.isValid());
 

@@ -43,16 +43,16 @@ ColumnLayout {
 
     function jobBarColor(stage) {
         if (stage === 4) return Theme.successBar;
-        if (stage === 5) return "#D97706";
+        if (stage === 5) return Theme.warningBar;
         if (stage === 6 || stage === 7) return Theme.errorBar;
-        return Theme.primary;
+        return Theme.primaryFill;
     }
 
     function overallBarColor() {
         if (isFinished) return Theme.successBar;
-        if (isFinishedWithWarnings) return "#D97706";
+        if (isFinishedWithWarnings) return Theme.warningBar;
         if (isCancelled || isUsbRemoved) return Theme.errorBar;
-        return Theme.primary;
+        return Theme.primaryFill;
     }
 
     function headingTitle() {
@@ -247,7 +247,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         height: 12
                         radius: 6
-                        color: Theme.divider
+                        color: Theme.progressTrack
                         clip: true
 
                         Rectangle {
@@ -416,7 +416,7 @@ ColumnLayout {
                         delegate: Rectangle {
                             Layout.fillWidth: true
                             implicitHeight: 68
-                            color: model.stage === 8 ? "#FAFBFD" : Theme.panel
+                            color: model.stage === 8 ? Theme.rowOfflineBg : Theme.panel
 
                             RowLayout {
                                 anchors.fill: parent
@@ -473,7 +473,7 @@ ColumnLayout {
                                             font.family: Theme.fontSans
                                             font.pixelSize: 13
                                             font.weight: Font.DemiBold
-                                            color: Theme.primary
+                                            color: Theme.primaryText
                                             elide: Text.ElideRight
                                         }
 
@@ -513,7 +513,7 @@ ColumnLayout {
                                             background: Rectangle {
                                                 radius: 6
                                                 color: parent.hovered ? Theme.primaryTint : "transparent"
-                                                border.color: parent.activeFocus ? Theme.primary : "transparent"
+                                                border.color: parent.activeFocus ? Theme.focusRing : "transparent"
                                                 border.width: parent.activeFocus ? Theme.focusRingWidth : 0
                                             }
                                             contentItem: Text {
@@ -522,7 +522,7 @@ ColumnLayout {
                                                 font.family: Theme.fontSans
                                                 font.pixelSize: 13
                                                 font.weight: Font.DemiBold
-                                                color: Theme.primary
+                                                color: Theme.primaryText
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
                                             }
@@ -574,7 +574,7 @@ ColumnLayout {
                                             Layout.minimumWidth: 80
                                             height: 8
                                             radius: 4
-                                            color: Theme.divider
+                                            color: Theme.progressTrack
                                             clip: true
 
                                             Rectangle {
@@ -665,7 +665,7 @@ ColumnLayout {
                     background: Rectangle {
                         radius: Theme.radiusControl
                         color: backLink.hovered ? Theme.primaryTint : "transparent"
-                        border.color: backLink.activeFocus ? Theme.primary : "transparent"
+                        border.color: backLink.activeFocus ? Theme.focusRing : "transparent"
                         border.width: backLink.activeFocus ? Theme.focusRingWidth : 0
                     }
 
@@ -675,7 +675,7 @@ ColumnLayout {
                         font.family: Theme.fontSans
                         font.pixelSize: 14
                         font.weight: Font.DemiBold
-                        color: backLink.enabled ? Theme.primary : Theme.disabledText
+                        color: backLink.enabled ? Theme.primaryText : Theme.disabledText
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }

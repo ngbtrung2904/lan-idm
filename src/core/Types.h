@@ -62,6 +62,10 @@ struct LogsConfig {
     bool includeModifiedAfterEnd = true;
 };
 
+struct UiConfig {
+    QString theme = QStringLiteral("light");
+};
+
 struct AppConfig {
     QString sshUser = QStringLiteral("user");
     QString sshKeyPath;
@@ -69,6 +73,7 @@ struct AppConfig {
     int maxParallel = 2;
     PathsConfig paths;
     LogsConfig logs;
+    UiConfig ui;
     QVector<PcConfig> pcs;
 };
 

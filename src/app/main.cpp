@@ -10,6 +10,8 @@
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QCoreApplication>
+#include <QDebug>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -40,6 +42,24 @@ int main(int argc, char *argv[])
 
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
+    static const char *const kFontPaths[] = {
+        ":/fonts/Inter-Regular.ttf",
+        ":/fonts/Inter-Medium.ttf",
+        ":/fonts/Inter-SemiBold.ttf",
+        ":/fonts/JetBrainsMono-Regular.ttf"
+    };
+
+    for (const char *fontPath : kFontPaths) {
+        if (QFontDatabase::addApplicationFont(QString::fromLatin1(fontPath)) < 0) {
+            qCritical().nospace() << "op=\"load_font\" path=\"" << fontPath
+                                  << "\" err=\"addApplicationFont failed\"";
+            return 1;
+        }
+    }
+
+    const QString kAppVersion = QStringLiteral(APP_VERSION);
+    const QString kAppAuthor = QStringLiteral("noname");
+
     if (parser.isSet(demoOption)) {
         dc::StubAuthController authController(nullptr);
         dc::StubSourcesController sourcesController(nullptr);
@@ -54,6 +74,9 @@ int main(int argc, char *argv[])
         engine.rootContext()->setContextProperty(QStringLiteral("authController"), &authController);
         engine.rootContext()->setContextProperty(QStringLiteral("sourcesController"), &sourcesController);
         engine.rootContext()->setContextProperty(QStringLiteral("transferController"), &transferController);
+        engine.rootContext()->setContextProperty(QStringLiteral("initialDarkTheme"), false);
+        engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), kAppVersion);
+        engine.rootContext()->setContextProperty(QStringLiteral("appAuthor"), kAppAuthor);
 
         const QUrl url(QStringLiteral("qrc:/qml/Main.qml"));
         QObject::connect(
@@ -78,6 +101,9 @@ int main(int argc, char *argv[])
         QQmlApplicationEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("configErrorText"), configError);
         engine.rootContext()->setContextProperty(QStringLiteral("configPathText"), resolvedConfigPath);
+        engine.rootContext()->setContextProperty(QStringLiteral("initialDarkTheme"), false);
+        engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), kAppVersion);
+        engine.rootContext()->setContextProperty(QStringLiteral("appAuthor"), kAppAuthor);
 
         const QUrl url(QStringLiteral("qrc:/qml/ConfigErrorWindow.qml"));
         QObject::connect(
@@ -131,6 +157,10 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("authController"), &authController);
     engine.rootContext()->setContextProperty(QStringLiteral("sourcesController"), &sourcesController);
     engine.rootContext()->setContextProperty(QStringLiteral("transferController"), &transferController);
+    engine.rootContext()->setContextProperty(QStringLiteral("initialDarkTheme"),
+                                             config.ui.theme == QStringLiteral("dark"));
+    engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), kAppVersion);
+    engine.rootContext()->setContextProperty(QStringLiteral("appAuthor"), kAppAuthor);
 
     const QUrl url(QStringLiteral("qrc:/qml/Main.qml"));
     QObject::connect(

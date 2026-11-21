@@ -11,6 +11,9 @@
   "logs": {
     "includeModifiedAfterEnd": true
   },
+  "ui": {
+    "theme": "light"
+  },
   "pcs": [
     { "id": "pc01", "host": "192.168.10.11" },
     { "id": "pc02", "host": "192.168.10.12" },

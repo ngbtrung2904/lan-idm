@@ -29,7 +29,7 @@ Rectangle {
         case "success": return Theme.success;
         case "error":   return Theme.error;
         case "warning": return Theme.warning;
-        case "info":    return Theme.primary;
+        case "info":    return Theme.primaryText;
         default:        return Theme.neutralChipText;
         }
     }
@@ -38,8 +38,8 @@ Rectangle {
         switch (tone) {
         case "success": return Theme.successBar;
         case "error":   return Theme.errorBar;
-        case "warning": return "#B45309";
-        case "info":    return Theme.primary;
+        case "warning": return Theme.warningBar;
+        case "info":    return Theme.primaryFill;
         default:        return Theme.neutralChipText;
         }
     }

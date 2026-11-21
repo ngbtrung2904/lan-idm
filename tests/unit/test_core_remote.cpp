@@ -25,6 +25,7 @@ private slots:
     void configStoreResolvePathPrecedence();
     void configStoreLogSourcesValidAndInvalid();
     void configStoreMediaPathsAndSupportsFlags();
+    void configStoreUiTheme();
 
     // SshOptions
     void sshOptionsRequiredFlagsAndNeverStrictNo();
@@ -662,6 +663,98 @@ void TestCoreRemote::configStoreMediaPathsAndSupportsFlags() {
             "pcs": [{ "id": "pc01", "host": "10.0.0.1", "supportsRecordings": 0 }]
         })", &cfg, &err));
         QCOMPARE(err, QStringLiteral("Missing or invalid key: pcs[0].supportsRecordings"));
+    }
+}
+
+void TestCoreRemote::configStoreUiTheme() {
+    // Default when "ui" is omitted -> "light"
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY2(ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.ui.theme, QStringLiteral("light"));
+    }
+
+    // Explicit "light"
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY2(ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "ui": { "theme": "light" },
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.ui.theme, QStringLiteral("light"));
+    }
+
+    // Explicit "dark"
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY2(ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "ui": { "theme": "dark" },
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.ui.theme, QStringLiteral("dark"));
+    }
+
+    // Empty "ui" object -> default "light"
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY2(ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "ui": {},
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.ui.theme, QStringLiteral("light"));
+    }
+
+    // Invalid "ui.theme": "blue" rejected
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY(!ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "ui": { "theme": "blue" },
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err));
+        QCOMPARE(err, QStringLiteral("Missing or invalid key: ui.theme"));
+    }
+
+    // Non-string "ui.theme" rejected
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY(!ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "ui": { "theme": 123 },
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err));
+        QCOMPARE(err, QStringLiteral("Missing or invalid key: ui.theme"));
+    }
+
+    // Non-object "ui" rejected
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY(!ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "ui": "dark",
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err));
+        QCOMPARE(err, QStringLiteral("Missing or invalid key: ui"));
     }
 }
 

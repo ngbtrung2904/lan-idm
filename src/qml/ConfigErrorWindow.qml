@@ -15,6 +15,12 @@ ApplicationWindow {
     title: qsTr("Configuration Error — Data Collector")
     color: Theme.bg
 
+    Component.onCompleted: {
+        if (typeof initialDarkTheme !== "undefined") {
+            Theme.dark = Boolean(initialDarkTheme);
+        }
+    }
+
     Rectangle {
         anchors.centerIn: parent
         width: Math.min(parent.width - 48, 560)

@@ -274,7 +274,7 @@ ColumnLayout {
                                             height: 22
                                             radius: 6
                                             color: "transparent"
-                                            border.color: Theme.primary
+                                            border.color: Theme.focusRing
                                             border.width: Theme.focusRingWidth
                                             visible: includePicturesBox.activeFocus
                                         }
@@ -284,8 +284,8 @@ ColumnLayout {
                                             width: 18
                                             height: 18
                                             radius: 4
-                                            color: includePicturesBox.checked ? Theme.primary : Theme.panel
-                                            border.color: includePicturesBox.checked ? Theme.primary : Theme.border
+                                            color: includePicturesBox.checked ? Theme.primaryFill : Theme.inputBg
+                                            border.color: includePicturesBox.checked ? Theme.primaryFill : Theme.inputBorder
                                             border.width: 1.5
 
                                             Text {
@@ -295,7 +295,7 @@ ColumnLayout {
                                                 font.family: Theme.fontSans
                                                 font.pixelSize: 12
                                                 font.weight: Font.Bold
-                                                color: "#FFFFFF"
+                                                color: Theme.textOnPrimary
                                             }
                                         }
                                     }
@@ -359,7 +359,7 @@ ColumnLayout {
                                             height: 22
                                             radius: 6
                                             color: "transparent"
-                                            border.color: Theme.primary
+                                            border.color: Theme.focusRing
                                             border.width: Theme.focusRingWidth
                                             visible: includeRecordingsBox.activeFocus
                                         }
@@ -369,8 +369,8 @@ ColumnLayout {
                                             width: 18
                                             height: 18
                                             radius: 4
-                                            color: includeRecordingsBox.checked ? Theme.primary : Theme.panel
-                                            border.color: includeRecordingsBox.checked ? Theme.primary : Theme.border
+                                            color: includeRecordingsBox.checked ? Theme.primaryFill : Theme.inputBg
+                                            border.color: includeRecordingsBox.checked ? Theme.primaryFill : Theme.inputBorder
                                             border.width: 1.5
 
                                             Text {
@@ -380,7 +380,7 @@ ColumnLayout {
                                                 font.family: Theme.fontSans
                                                 font.pixelSize: 12
                                                 font.weight: Font.Bold
-                                                color: "#FFFFFF"
+                                                color: Theme.textOnPrimary
                                             }
                                         }
                                     }
@@ -470,7 +470,7 @@ ColumnLayout {
                                         height: 22
                                         radius: 6
                                         color: "transparent"
-                                        border.color: Theme.primary
+                                        border.color: Theme.focusRing
                                         border.width: Theme.focusRingWidth
                                         visible: selectAllBox.activeFocus
                                     }
@@ -480,8 +480,8 @@ ColumnLayout {
                                         width: 18
                                         height: 18
                                         radius: 4
-                                        color: selectAllBox.checked ? Theme.primary : Theme.panel
-                                        border.color: selectAllBox.checked ? Theme.primary : Theme.border
+                                        color: selectAllBox.checked ? Theme.primaryFill : Theme.inputBg
+                                        border.color: selectAllBox.checked ? Theme.primaryFill : Theme.inputBorder
                                         border.width: 1.5
 
                                         Text {
@@ -491,7 +491,7 @@ ColumnLayout {
                                             font.family: Theme.fontSans
                                             font.pixelSize: 12
                                             font.weight: Font.Bold
-                                            color: "#FFFFFF"
+                                            color: Theme.textOnPrimary
                                         }
                                     }
                                 }
@@ -582,7 +582,7 @@ ColumnLayout {
                             id: pcRow
                             Layout.fillWidth: true
                             implicitHeight: 66
-                            color: model.selectable ? Theme.panel : "#FAFBFD"
+                            color: model.selectable ? Theme.panel : Theme.rowOfflineBg
 
                             RowLayout {
                                 anchors.fill: parent
@@ -614,7 +614,7 @@ ColumnLayout {
                                             height: 22
                                             radius: 6
                                             color: "transparent"
-                                            border.color: Theme.primary
+                                            border.color: Theme.focusRing
                                             border.width: Theme.focusRingWidth
                                             visible: rowCheck.activeFocus
                                         }
@@ -625,15 +625,15 @@ ColumnLayout {
                                             height: 18
                                             radius: 4
                                             color: !model.selectable
-                                                   ? "#F3F4F6"
+                                                   ? Theme.disabledBg
                                                    : model.selected
-                                                     ? Theme.primary
-                                                     : Theme.panel
+                                                     ? Theme.primaryFill
+                                                     : Theme.inputBg
                                             border.color: !model.selectable
-                                                          ? "#D1D5DB"
+                                                          ? Theme.disabledBorder
                                                           : model.selected
-                                                            ? Theme.primary
-                                                            : Theme.border
+                                                            ? Theme.primaryFill
+                                                            : Theme.inputBorder
                                             border.width: 1.5
 
                                             Text {
@@ -643,7 +643,7 @@ ColumnLayout {
                                                 font.family: Theme.fontSans
                                                 font.pixelSize: 12
                                                 font.weight: Font.Bold
-                                                color: "#FFFFFF"
+                                                color: Theme.textOnPrimary
                                             }
                                         }
                                     }
@@ -900,7 +900,7 @@ ColumnLayout {
                             Layout.fillWidth: true
                             height: 8
                             radius: 4
-                            color: Theme.divider
+                            color: Theme.progressTrack
                             clip: true
 
                             Rectangle {
@@ -918,7 +918,7 @@ ColumnLayout {
                                 }
                                 color: (!sourcesController.fits && sourcesController.selectedCount > 0)
                                        ? Theme.errorBar
-                                       : Theme.primary
+                                       : Theme.primaryFill
 
                                 Behavior on width {
                                     NumberAnimation { duration: 180; easing.type: Easing.OutCubic }

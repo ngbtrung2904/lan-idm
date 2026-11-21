@@ -54,7 +54,7 @@ ColumnLayout {
                 anchors.margins: -3
                 radius: Theme.radiusControl + 2
                 color: "transparent"
-                border.color: Theme.primary
+                border.color: Theme.focusRing
                 border.width: Theme.focusRingWidth
                 visible: triggerBtn.activeFocus || pickerPopup.opened
             }
@@ -62,14 +62,14 @@ ColumnLayout {
             Rectangle {
                 anchors.fill: parent
                 radius: Theme.radiusControl
-                color: Theme.panel
+                color: Theme.inputBg
                 border.color: root.invalid
                               ? Theme.errorBar
                               : pickerPopup.opened
-                                ? Theme.primary
+                                ? Theme.focusRing
                                 : triggerBtn.hovered
-                                  ? "#9CA3AF"
-                                  : Theme.border
+                                  ? Theme.muted
+                                  : Theme.inputBorder
                 border.width: (root.invalid || pickerPopup.opened) ? 1.5 : 1
             }
         }
@@ -95,10 +95,12 @@ ColumnLayout {
                 width: 16
                 height: 16
                 Layout.alignment: Qt.AlignVCenter
+                property color strokeColor: Theme.text
+                onStrokeColorChanged: requestPaint()
                 onPaint: {
                     var ctx = getContext("2d");
                     ctx.clearRect(0, 0, width, height);
-                    ctx.strokeStyle = Theme.text;
+                    ctx.strokeStyle = strokeColor;
                     ctx.lineWidth = 1.4;
                     ctx.beginPath();
                     ctx.roundedRect(2, 3.5, 12, 10.5, 2, 2);

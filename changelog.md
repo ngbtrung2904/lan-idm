@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0] - 2026-11-21
+
+### Features
+- **Bundled Inter & JetBrains Mono Fonts, Light/Dark Theme, and Version Footer**:
+  - `resources/fonts/` & `src/app/CMakeLists.txt` & `CMakeLists.txt`: Bundled static `Inter` (`Regular`, `Medium`, `SemiBold`) and `JetBrains Mono` (`Regular`) TTF fonts via Qt resources (`/fonts/...`) for offline LAN deployments and installed `Inter-OFL.txt` and `JetBrainsMono-OFL.txt` license files into `${CMAKE_INSTALL_DATADIR}/doc/data-collector`.
+  - `src/core/Types.h` & `src/core/ConfigStore.cpp`: Added `UiConfig` (`ui.theme`: `"light"` or `"dark"`, default `"light"`) to `AppConfig` with strict JSON schema validation.
+  - `src/app/main.cpp`: Registered all four bundled fonts via `QFontDatabase::addApplicationFont()` at startup with structured error logging on failure, and exposed `initialDarkTheme`, `appVersion`, and `appAuthor` (`k4@vtx`) context properties to all QML engines (`--demo`, `ConfigErrorWindow`, and normal mode).
+  - `src/qml/`: Implemented complete light/dark theme token palettes in `Theme.qml`, moon/sun live theme toggle, and a bottom version/copyright bar (`k4@vtx`) across views.
+  - `config.example.json` & `scripts/setup-desktop.sh`: Added `"ui": { "theme": "light" }` to the example and generated configuration files.
+  - `tests/unit/test_core_remote.cpp`, `tests/CMakeLists.txt`, & `tests/integration/test_gui_smoke.cpp`: Added unit tests for `ui.theme` validation and smoke test verification that bundled `Inter` and `JetBrains Mono` font families load into `QFontDatabase::families()`.
+
 ## [0.3.0] - 2026-11-19
 
 ### Features

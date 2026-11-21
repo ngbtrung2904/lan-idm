@@ -213,6 +213,29 @@ bool ConfigStore::parseJson(const QByteArray &jsonData, AppConfig *outConfig, QS
         }
     }
 
+    // ui (optional object)
+    if (root.contains(QStringLiteral("ui"))) {
+        const QJsonValue uv = root.value(QStringLiteral("ui"));
+        if (!uv.isObject()) {
+            setError(error, QStringLiteral("Missing or invalid key: ui"));
+            return false;
+        }
+        const QJsonObject uo = uv.toObject();
+        if (uo.contains(QStringLiteral("theme"))) {
+            const QJsonValue tv = uo.value(QStringLiteral("theme"));
+            if (!tv.isString()) {
+                setError(error, QStringLiteral("Missing or invalid key: ui.theme"));
+                return false;
+            }
+            const QString themeStr = tv.toString().trimmed();
+            if (themeStr != QLatin1String("light") && themeStr != QLatin1String("dark")) {
+                setError(error, QStringLiteral("Missing or invalid key: ui.theme"));
+                return false;
+            }
+            cfg.ui.theme = themeStr;
+        }
+    }
+
     // pcs (required non-empty array)
     if (!root.contains(QStringLiteral("pcs")) || !root.value(QStringLiteral("pcs")).isArray()) {
         setError(error, QStringLiteral("Missing or invalid key: pcs"));

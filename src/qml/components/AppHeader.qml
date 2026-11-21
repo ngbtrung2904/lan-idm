@@ -46,10 +46,12 @@ Rectangle {
                 width: 20
                 height: 20
                 anchors.verticalCenter: parent.verticalCenter
+                property color strokeColor: Theme.primaryFill
+                onStrokeColorChanged: requestPaint()
                 onPaint: {
                     var ctx = getContext("2d");
                     ctx.clearRect(0, 0, width, height);
-                    ctx.strokeStyle = Theme.primary;
+                    ctx.strokeStyle = strokeColor;
                     ctx.lineWidth = 2;
                     ctx.lineCap = "round";
                     ctx.lineJoin = "round";
@@ -95,7 +97,7 @@ Rectangle {
                 return Theme.successBg;
             }
             readonly property color pillBorder: {
-                if (menuOpen) return Theme.primary;
+                if (menuOpen) return Theme.focusRing;
                 if (!hasDrive) return Theme.warningBorder;
                 return Theme.successBorder;
             }
@@ -126,7 +128,7 @@ Rectangle {
                     anchors.margins: -3
                     radius: Theme.radiusChip
                     color: "transparent"
-                    border.color: Theme.primary
+                    border.color: Theme.focusRing
                     border.width: Theme.focusRingWidth
                     visible: usbPill.activeFocus && !usbPill.menuOpen
                 }
@@ -153,7 +155,7 @@ Rectangle {
                     width: 14
                     height: 16
                     anchors.verticalCenter: parent.verticalCenter
-                    property color strokeColor: usbPill.menuOpen ? Theme.primary : usbPill.pillTextColor
+                    property color strokeColor: usbPill.menuOpen ? Theme.primaryText : usbPill.pillTextColor
                     onStrokeColorChanged: requestPaint()
                     onPaint: {
                         var ctx = getContext("2d");
@@ -251,7 +253,7 @@ Rectangle {
                                 color: model.selected
                                        ? Theme.primaryTint
                                        : driveRow.hovered
-                                         ? "#F9FAFB"
+                                         ? Theme.hoverBg
                                          : "transparent"
                                 radius: index === 0 ? Theme.radiusCard : 0
                             }
@@ -299,7 +301,7 @@ Rectangle {
                                     font.family: Theme.fontSans
                                     font.pixelSize: 15
                                     font.weight: Font.Bold
-                                    color: Theme.primary
+                                    color: Theme.primaryText
                                 }
                             }
                         }
@@ -343,7 +345,7 @@ Rectangle {
                         }
 
                         background: Rectangle {
-                            color: rescanItem.hovered ? "#F9FAFB" : "transparent"
+                            color: rescanItem.hovered ? Theme.hoverBg : "transparent"
                             radius: Theme.radiusCard
                         }
 
@@ -358,7 +360,7 @@ Rectangle {
                                 font.family: Theme.fontSans
                                 font.pixelSize: 15
                                 font.weight: Font.DemiBold
-                                color: Theme.primary
+                                color: Theme.primaryText
                                 anchors.verticalCenter: parent.verticalCenter
                             }
 
@@ -367,7 +369,7 @@ Rectangle {
                                 font.family: Theme.fontSans
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
-                                color: Theme.primary
+                                color: Theme.primaryText
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                         }
@@ -403,7 +405,7 @@ Rectangle {
             background: Rectangle {
                 radius: Theme.radiusControl
                 color: signOutBtn.hovered ? Theme.primaryTint : "transparent"
-                border.color: signOutBtn.activeFocus ? Theme.primary : "transparent"
+                border.color: signOutBtn.activeFocus ? Theme.focusRing : "transparent"
                 border.width: signOutBtn.activeFocus ? Theme.focusRingWidth : 0
             }
 
@@ -413,10 +415,15 @@ Rectangle {
                 font.family: Theme.fontSans
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
-                color: Theme.primary
+                color: Theme.primaryText
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
+        }
+
+        // Light / Dark theme toggle
+        ThemeToggleButton {
+            Layout.alignment: Qt.AlignVCenter
         }
     }
 }

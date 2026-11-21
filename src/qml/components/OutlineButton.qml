@@ -24,22 +24,22 @@ Button {
 
     readonly property color resolvedTextColor: {
         if (!control.enabled) return Theme.disabledText;
-        if (variant === "primary" || variant === "active") return Theme.primary;
+        if (variant === "primary" || variant === "active") return Theme.primaryText;
         if (variant === "danger") return Theme.error;
         return Theme.text;
     }
 
     readonly property color resolvedBorderColor: {
-        if (!control.enabled) return Theme.border;
-        if (variant === "primary" || variant === "active") return Theme.primary;
-        return Theme.border;
+        if (!control.enabled) return Theme.disabledBorder;
+        if (variant === "primary" || variant === "active") return Theme.primaryText;
+        return Theme.inputBorder;
     }
 
     readonly property color resolvedBgColor: {
         if (!control.enabled) return Theme.disabledBg;
         if (variant === "active") return Theme.primaryTint;
-        if (control.down) return "#E5E7EB";
-        if (control.hovered) return variant === "primary" ? Theme.primaryTint : "#F9FAFB";
+        if (control.down) return Theme.pressedBg;
+        if (control.hovered) return variant === "primary" ? Theme.primaryTint : Theme.hoverBg;
         return Theme.panel;
     }
 
@@ -49,7 +49,7 @@ Button {
             anchors.margins: -3
             radius: Theme.radiusControl + 2
             color: "transparent"
-            border.color: Theme.primary
+            border.color: Theme.focusRing
             border.width: Theme.focusRingWidth
             visible: control.activeFocus
         }

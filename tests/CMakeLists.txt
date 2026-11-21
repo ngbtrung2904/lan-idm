@@ -35,6 +35,15 @@ add_executable(test_gui_smoke
     ${CMAKE_SOURCE_DIR}/src/app/TransferController.h
     ${CMAKE_SOURCE_DIR}/src/app/TransferController.cpp
 )
+qt_add_resources(test_gui_smoke "fonts"
+    PREFIX "/fonts"
+    BASE "${CMAKE_SOURCE_DIR}/resources/fonts"
+    FILES
+        "${CMAKE_SOURCE_DIR}/resources/fonts/Inter-Regular.ttf"
+        "${CMAKE_SOURCE_DIR}/resources/fonts/Inter-Medium.ttf"
+        "${CMAKE_SOURCE_DIR}/resources/fonts/Inter-SemiBold.ttf"
+        "${CMAKE_SOURCE_DIR}/resources/fonts/JetBrainsMono-Regular.ttf"
+)
 target_include_directories(test_gui_smoke PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/app
