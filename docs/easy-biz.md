@@ -77,20 +77,20 @@
 ### Symptom
 After running:
 ```bash
-./scripts/setup-desktop.sh --user trungnb --hosts pc01:192.168.68.116 --keep-password-auth
+./scripts/setup-desktop.sh --user <user_name> --hosts pc_name:<user_name>@<pc_ip> --keep-password-auth
 ```
-Running `ssh trungnb@192.168.68.116` did **not** ask for a password and immediately failed with:
+Running `ssh <user_name>@<pc_ip>` did **not** ask for a password and immediately failed with:
 ```text
 PTY allocation request failed on channel 0
 /usr/bin/rrsync error: SSH_ORIGINAL_COMMAND does not run rsync
-Connection to 192.168.68.116 closed.
+Connection to <pc_ip> closed.
 ```
 
 ### Root Cause (Why Password Prompt Was Skipped)
 1. Password authentication was **still enabled** on the remote PC (`--keep-password-auth` worked as intended).
 2. However, `collector_key` was originally stored inside `~/.ssh/collector_key` on the Ubuntu desktop.
 3. On Ubuntu Desktop, **GNOME Keyring** (`SSH_AUTH_SOCK=/run/user/1000/keyring/ssh`) automatically scans `~/.ssh/*.pub` and loads every key in `~/.ssh/` into your desktop's system SSH agent.
-4. When you ran `ssh trungnb@192.168.68.116`, OpenSSH **always tries keys in your system `ssh-agent` BEFORE asking for a password**.
+4. When you ran `ssh <user_name>@<pc_ip>`, OpenSSH **always tries keys in your system `ssh-agent` BEFORE asking for a password**.
 5. The remote PC saw `collector_key`, accepted it (so it never needed to ask for your password!), and immediately applied the `authorized_keys` rule for `collector_key` (`command="/usr/bin/rrsync -ro ...",restrict`), which blocks interactive terminal shells.
 
 ### How It Was Fixed
@@ -100,9 +100,14 @@ Connection to 192.168.68.116 closed.
    ```
 2. Because the key is no longer inside `~/.ssh/`, Ubuntu's GNOME Keyring never auto-loads it into your system `ssh-agent`.
 3. Now:
-   - **Normal terminal `ssh trungnb@192.168.68.116`** has no `collector_key` in the system agent, so it prompts for your password as usual and opens a bash shell.
+   - **Normal terminal `ssh <user_name>@<pc_ip>`** has no `collector_key` in the system agent, so it prompts for your password as usual and opens a bash shell.
    - **Data Collector GUI** runs its own private `ssh-agent` and explicitly passes `-i ~/.local/share/DataCollector/collector_key`, so `rsync` collection works seamlessly.
    - If you ever want to force password-only SSH from any machine, you can also run:
      ```bash
      ssh -o PubkeyAuthentication=no <user>@<pc_ip>
      ```
+
+## Bash scripts
+```bash
+./scripts/setup-desktop.sh --skip-timezone --keep-password-auth --hosts pc_name:<user_name>@<pc_ip> 
+```
