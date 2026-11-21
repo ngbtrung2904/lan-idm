@@ -18,6 +18,7 @@ KNOWN_HOSTS_RAW="~/.local/share/DataCollector/known_hosts"
 CONFIG_OUT_RAW="~/.config/DataCollector/config.json"
 HOSTS_SPEC=""
 TIMEZONE=""
+SKIP_TIMEZONE=0
 SKIP_DISTRIBUTE=0
 KEEP_PASSWORD_AUTH=0
 DRY_RUN=0
@@ -60,6 +61,8 @@ Options:
                             (default: ~/.config/DataCollector/config.json)
   --timezone <tz>           Timezone to pass to provision-pc.sh during remote setup
                             (default: desktop's current timezone, or UTC)
+  --skip-timezone           Pass --skip-timezone to provision-pc.sh (leave remote PC
+                            timezones untouched).
   --skip-distribute         Skip copying/running provision-pc.sh on the PCs (use when
                             PCs were already provisioned manually).
   --keep-password-auth      Pass --keep-password-auth to provision-pc.sh during remote
@@ -175,6 +178,10 @@ while [[ $# -gt 0 ]]; do
             TIMEZONE="$2"
             shift 2
             ;;
+        --skip-timezone)
+            SKIP_TIMEZONE=1
+            shift
+            ;;
         --skip-distribute)
             SKIP_DISTRIBUTE=1
             shift
@@ -218,18 +225,20 @@ CONFIG_OUT="$(expand_tilde "$CONFIG_OUT_RAW")"
 KEY_PATH_CONFIG="$(contract_tilde "$KEY_PATH")"
 KNOWN_HOSTS_CONFIG="$(contract_tilde "$KNOWN_HOSTS")"
 
-if [[ -z "$TIMEZONE" ]]; then
-    if command -v timedatectl >/dev/null 2>&1; then
-        TIMEZONE="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
-    fi
+if [[ "$SKIP_TIMEZONE" -eq 0 ]]; then
     if [[ -z "$TIMEZONE" ]]; then
-        TIMEZONE="UTC"
+        if command -v timedatectl >/dev/null 2>&1; then
+            TIMEZONE="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+        fi
+        if [[ -z "$TIMEZONE" ]]; then
+            TIMEZONE="UTC"
+        fi
     fi
-fi
 
-if [[ ! "$TIMEZONE" =~ ^[A-Za-z0-9._/+-]+$ ]]; then
-    log_err "Invalid timezone: ${TIMEZONE}"
-    exit 2
+    if [[ ! "$TIMEZONE" =~ ^[A-Za-z0-9._/+-]+$ ]]; then
+        log_err "Invalid timezone: ${TIMEZONE}"
+        exit 2
+    fi
 fi
 
 # Parse --hosts into parallel arrays
@@ -409,7 +418,15 @@ fi
 if [[ "$SKIP_DISTRIBUTE" -eq 1 ]]; then
     log_info "Step 3/5: Skipping remote PC provisioning (--skip-distribute)."
 else
-    log_info "Step 3/5: Provisioning remote PCs via provision-pc.sh (timezone=${TIMEZONE})..."
+    if [[ "$SKIP_TIMEZONE" -eq 1 ]]; then
+        log_info "Step 3/5: Provisioning remote PCs via provision-pc.sh (timezone=unchanged)..."
+        PROVISION_TZ_ARGS="--skip-timezone"
+        PROVISION_TZ_DISPLAY="--skip-timezone"
+    else
+        log_info "Step 3/5: Provisioning remote PCs via provision-pc.sh (timezone=${TIMEZONE})..."
+        PROVISION_TZ_ARGS="--timezone '${TIMEZONE}'"
+        PROVISION_TZ_DISPLAY="--timezone ${TIMEZONE}"
+    fi
     PROVISION_SCRIPT="${SCRIPT_DIR}/provision-pc.sh"
     if [[ ! -f "$PROVISION_SCRIPT" ]]; then
         log_err "Provisioning script not found at ${PROVISION_SCRIPT}."
@@ -430,7 +447,7 @@ else
             log_dry "Host ${pc_id} (${pc_user}@${pc_host}:${pc_port}):"
             log_dry "  Would copy ${PROVISION_SCRIPT} via scp -P ${pc_port} -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS}"
             log_dry "  Would run remotely via ssh -t -p ${pc_port} -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS} ${pc_user}@${pc_host}:"
-            log_dry "    sudo bash /tmp/provision-pc.sh --user ${pc_user} --pubkey <contents of ${KEY_PATH}.pub> --timezone ${TIMEZONE} ${PROVISION_AUTH_FLAG}"
+            log_dry "    sudo bash /tmp/provision-pc.sh --user ${pc_user} --pubkey <contents of ${KEY_PATH}.pub> ${PROVISION_TZ_DISPLAY} ${PROVISION_AUTH_FLAG}"
         done
     else
         for i in "${!PC_IDS[@]}"; do
@@ -472,7 +489,7 @@ else
                 -o ControlMaster=auto \
                 -o ControlPath="$CTRL_SOCK" \
                 "${pc_user}@${pc_host}" \
-                "sudo bash '${REMOTE_TMP_SCRIPT}' --user '${pc_user}' --pubkey '${REMOTE_TMP_PUB}' --timezone '${TIMEZONE}' '${PROVISION_AUTH_FLAG}'; rc=\$?; rm -f '${REMOTE_TMP_SCRIPT}' '${REMOTE_TMP_PUB}'; exit \$rc"
+                "sudo bash '${REMOTE_TMP_SCRIPT}' --user '${pc_user}' --pubkey '${REMOTE_TMP_PUB}' ${PROVISION_TZ_ARGS} '${PROVISION_AUTH_FLAG}'; rc=\$?; rm -f '${REMOTE_TMP_SCRIPT}' '${REMOTE_TMP_PUB}'; exit \$rc"
             SSH_RC=$?
             set -e
 

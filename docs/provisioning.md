@@ -149,6 +149,7 @@ If you prefer to provision each PC directly (for example, via local console or a
 | `--pubkey <path_or_string>` | *(required)* | Path to `.pub` file or raw OpenSSH public key string |
 | `--user <ssh_user>` | `user` | Target Linux account on the PC |
 | `--timezone <tz>` | `UTC` | IANA timezone to set via `timedatectl` |
+| `--skip-timezone` | *(off)* | Leave the PC's existing timezone untouched |
 | `--disable-password-auth` | *(enabled)* | Disable `PasswordAuthentication` and `KbdInteractiveAuthentication` |
 | `--keep-password-auth` | *(off)* | Keep password auth enabled for staged rollout |
 | `--dry-run` | *(off)* | Print every command and file change without modifying the system |
@@ -163,6 +164,7 @@ If you prefer to provision each PC directly (for example, via local console or a
 | `--known-hosts <path>` | `~/.local/share/DataCollector/known_hosts` | App-dedicated `known_hosts` file |
 | `--config-out <path>` | `~/.config/DataCollector/config.json` | Output path for `config.json` |
 | `--timezone <tz>` | Desktop's current TZ | Timezone forwarded to `provision-pc.sh` |
+| `--skip-timezone` | *(off)* | Forward `--skip-timezone` to `provision-pc.sh` (leave remote PC timezones untouched) |
 | `--skip-distribute` | *(off)* | Skip remote `provision-pc.sh` execution |
 | `--keep-password-auth` | *(off)* | Forward `--keep-password-auth` to `provision-pc.sh` |
 | `--dry-run` | *(off)* | Print every change without modifying the system or connecting |

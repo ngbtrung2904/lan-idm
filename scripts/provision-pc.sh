@@ -12,6 +12,7 @@ set -euo pipefail
 SSH_USER="user"
 PUBKEY_INPUT=""
 TIMEZONE="UTC"
+SKIP_TIMEZONE=0
 DISABLE_PASSWORD_AUTH=1
 DRY_RUN=0
 
@@ -31,6 +32,7 @@ Options:
   --user <ssh_user>           Target Linux user account on this PC (default: user)
   --timezone <tz>             IANA timezone to configure, e.g. UTC or Asia/Ho_Chi_Minh
                               (default: UTC). Must match the desktop timezone.
+  --skip-timezone             Leave the PC's existing timezone untouched.
   --disable-password-auth     Disable SSH password and keyboard-interactive auth
                               (default: enabled).
   --keep-password-auth        Keep SSH password auth enabled for staged rollout until
@@ -106,6 +108,10 @@ while [[ $# -gt 0 ]]; do
             TIMEZONE="$2"
             shift 2
             ;;
+        --skip-timezone)
+            SKIP_TIMEZONE=1
+            shift
+            ;;
         --disable-password-auth)
             DISABLE_PASSWORD_AUTH=1
             shift
@@ -176,7 +182,7 @@ else
 fi
 KEY_FINGERPRINT_MATCH="${PUBKEY_TYPE} ${PUBKEY_BLOB}"
 
-if [[ -d /usr/share/zoneinfo ]] && [[ ! -f "/usr/share/zoneinfo/${TIMEZONE}" ]]; then
+if [[ "$SKIP_TIMEZONE" -eq 0 ]] && [[ -d /usr/share/zoneinfo ]] && [[ ! -f "/usr/share/zoneinfo/${TIMEZONE}" ]]; then
     log_err "Invalid timezone '${TIMEZONE}': /usr/share/zoneinfo/${TIMEZONE} not found."
     exit 2
 fi
@@ -407,21 +413,27 @@ else
 fi
 
 # --- Step 5: Configure timezone ---
-log_info "Step 5/5: Configuring timezone (${TIMEZONE}) (leaving PTP time sync untouched)..."
-
-CURRENT_TZ=""
-if command -v timedatectl >/dev/null 2>&1; then
-    CURRENT_TZ="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
-fi
-
-if [[ "$CURRENT_TZ" == "$TIMEZONE" ]]; then
-    log_info "Timezone is already set to ${TIMEZONE} (no change)."
+if [[ "$SKIP_TIMEZONE" -eq 1 ]]; then
+    log_info "Step 5/5: Skipping timezone configuration (--skip-timezone)."
 else
-    run_cmd timedatectl set-timezone "$TIMEZONE"
+    log_info "Step 5/5: Configuring timezone (${TIMEZONE}) (leaving PTP time sync untouched)..."
+
+    CURRENT_TZ=""
+    if command -v timedatectl >/dev/null 2>&1; then
+        CURRENT_TZ="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+    fi
+
+    if [[ "$CURRENT_TZ" == "$TIMEZONE" ]]; then
+        log_info "Timezone is already set to ${TIMEZONE} (no change)."
+    else
+        run_cmd timedatectl set-timezone "$TIMEZONE"
+    fi
 fi
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
     log_info "Dry-run complete. No changes were applied."
 else
-    log_info "Provisioning complete for user '${SSH_USER}' (timezone=${TIMEZONE}, password_auth_disabled=${DISABLE_PASSWORD_AUTH})."
+    TZ_SUMMARY="${TIMEZONE}"
+    [[ "$SKIP_TIMEZONE" -eq 1 ]] && TZ_SUMMARY="unchanged"
+    log_info "Provisioning complete for user '${SSH_USER}' (timezone=${TZ_SUMMARY}, password_auth_disabled=${DISABLE_PASSWORD_AUTH})."
 fi

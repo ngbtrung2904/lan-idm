@@ -89,6 +89,7 @@ sudo sshd -t && sudo systemctl reload ssh
 | `--hosts <id:[user@]ip,...>` | **Required.** Comma-separated PC list (`id:ip` or `id:user@ip` when each PC has a unique username) |
 | `--user <name>` | Default SSH username on PCs when `user@` is omitted in `--hosts` (default: `user`) |
 | `--timezone <tz>` | IANA timezone for all machines |
+| `--skip-timezone` | Skip timezone setup on remote PCs (when already configured) |
 | `--keep-password-auth` | Keep password login enabled — remove after testing |
 | `--dry-run` | Preview changes without modifying anything |
 | `--key-path <path>` | Custom key location (default: `~/.local/share/DataCollector/collector_key`) |
