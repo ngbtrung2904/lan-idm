@@ -635,6 +635,19 @@ void SourcesController::selectLocalDisk(const QString &path) {
     recalculateEstimate();
 }
 
+void SourcesController::selectUsbMode() {
+    mUseLocalDisk = false;
+    if (mUsbMonitor != nullptr) {
+        mUsbMonitor->rescan();
+        onUsbDrivesChanged();
+    } else {
+        mSelectedDriveIndex = mDriveModel.items().isEmpty() ? -1 : 0;
+        mDriveModel.setSelectedIndex(mSelectedDriveIndex);
+        emit drivesChanged();
+        recalculateEstimate();
+    }
+}
+
 void SourcesController::startCopy() {
     if (mBusy) {
         emit startError(QStringLiteral("Still checking PCs. Please wait until scanning finishes."));

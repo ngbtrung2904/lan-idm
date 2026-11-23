@@ -650,6 +650,14 @@ void StubSourcesController::selectLocalDisk(const QString &path) {
     recalculateEstimate();
 }
 
+void StubSourcesController::selectUsbMode() {
+    mUseLocalDisk = false;
+    mSelectedDriveIndex = mDriveModel.items().isEmpty() ? -1 : 0;
+    mDriveModel.setSelectedIndex(mSelectedDriveIndex);
+    emit drivesChanged();
+    recalculateEstimate();
+}
+
 void StubSourcesController::startCopy() {
     if (!canStart()) {
         emit startError(QStringLiteral("Cannot start copy. Check time range, selected PCs, and USB space."));

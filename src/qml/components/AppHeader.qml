@@ -22,6 +22,7 @@ Rectangle {
     signal rescanDrivesClicked()
     signal signOutClicked()
     signal selectLocalDiskClicked()
+    signal selectUsbModeClicked()
     signal changeLocalFolderClicked()
 
     height: Theme.headerHeight
@@ -323,18 +324,65 @@ Rectangle {
                         }
                     }
 
-                    // Empty state when no drives
-                    Item {
+                    // Empty state when no drives (clickable to return to USB mode if currently on Local disk)
+                    ItemDelegate {
+                        id: noUsbRow
                         visible: !header.drivesModel || driveRepeater.count === 0
                         Layout.fillWidth: true
-                        implicitHeight: 52
+                        implicitHeight: header.useLocalDisk ? 56 : 52
+                        padding: 0
+                        enabled: header.useLocalDisk
+                        hoverEnabled: header.useLocalDisk
+                        focusPolicy: header.useLocalDisk ? Qt.StrongFocus : Qt.NoFocus
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("No USB drives detected")
-                            font.family: Theme.fontSans
-                            font.pixelSize: 13
-                            color: Theme.muted
+                        Accessible.role: header.useLocalDisk ? Accessible.MenuItem : Accessible.StaticText
+                        Accessible.name: header.useLocalDisk
+                                         ? qsTr("Switch to USB drive (no USB drives detected yet)")
+                                         : qsTr("No USB drives detected")
+
+                        onClicked: {
+                            if (header.useLocalDisk) {
+                                header.selectUsbModeClicked();
+                                drivePopup.close();
+                            }
+                        }
+
+                        background: Rectangle {
+                            color: (header.useLocalDisk && noUsbRow.hovered) ? Theme.hoverBg : "transparent"
+                            radius: Theme.radiusCard
+                            border.color: noUsbRow.activeFocus ? Theme.focusRing : "transparent"
+                            border.width: noUsbRow.activeFocus ? Theme.focusRingWidth : 0
+                        }
+
+                        contentItem: ColumnLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 16
+                            spacing: 2
+
+                            Item { Layout.fillHeight: true }
+
+                            Text {
+                                visible: header.useLocalDisk
+                                text: qsTr("Use USB drive")
+                                font.family: Theme.fontSans
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                                color: Theme.primaryText
+                            }
+
+                            Text {
+                                text: header.useLocalDisk
+                                      ? qsTr("No USB drives detected yet")
+                                      : qsTr("No USB drives detected")
+                                font.family: Theme.fontSans
+                                font.pixelSize: header.useLocalDisk ? 12 : 13
+                                color: Theme.muted
+                                horizontalAlignment: header.useLocalDisk ? Text.AlignLeft : Text.AlignHCenter
+                                Layout.fillWidth: true
+                            }
+
+                            Item { Layout.fillHeight: true }
                         }
                     }
 

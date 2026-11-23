@@ -53,6 +53,7 @@ ColumnLayout {
         onRescanDrivesClicked: sourcesController.rescanDrives()
         onSignOutClicked: authController.lock()
         onSelectLocalDiskClicked: sourcesController.selectLocalDisk(sourcesController.localDiskPath)
+        onSelectUsbModeClicked: sourcesController.selectUsbMode()
         onChangeLocalFolderClicked: localFolderDialog.open()
     }
 

@@ -207,6 +207,7 @@ public:
     Q_INVOKABLE void applyPreset(const QString &name);
     Q_INVOKABLE void selectDrive(int index);
     Q_INVOKABLE void selectLocalDisk(const QString &path);
+    Q_INVOKABLE void selectUsbMode();
     Q_INVOKABLE void startCopy();
 
 signals:
