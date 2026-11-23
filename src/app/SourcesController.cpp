@@ -1,4 +1,5 @@
 #include "SourcesController.h"
+#include "core/ConfigStore.h"
 #include "core/KeyAgent.h"
 #include "core/SpaceEstimator.h"
 #include "core/TimeFilter.h"
@@ -7,13 +8,53 @@
 #include <QDate>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QStorageInfo>
 #include <QTime>
 
 namespace dc {
 
 namespace {
 constexpr int kMaxParallelProbes = 6;
-constexpr double kSpaceMarginFraction = 0.02;
+
+bool queryLocalDiskSpace(const QString &path, qint64 *outFree, qint64 *outTotal) {
+    if (outFree != nullptr) {
+        *outFree = 0;
+    }
+    if (outTotal != nullptr) {
+        *outTotal = 0;
+    }
+    if (path.isEmpty()) {
+        return false;
+    }
+
+    QString probe = QDir::cleanPath(path);
+    while (!probe.isEmpty() && !QDir(probe).exists()) {
+        const QString parent = QFileInfo(probe).path();
+        if (parent == probe) {
+            break;
+        }
+        probe = parent;
+    }
+    if (probe.isEmpty() || !QDir(probe).exists()) {
+        return false;
+    }
+
+    const QStorageInfo storage(probe);
+    if (!storage.isValid() || !storage.isReady()) {
+        return false;
+    }
+
+    const qint64 freeBytes = qMax<qint64>(0, storage.bytesAvailable());
+    const qint64 totalBytes = qMax<qint64>(0, storage.bytesTotal());
+    if (outFree != nullptr) {
+        *outFree = freeBytes;
+    }
+    if (outTotal != nullptr) {
+        *outTotal = totalBytes;
+    }
+    return true;
+}
 } // namespace
 
 // ============================================================================
@@ -252,6 +293,10 @@ SourcesController::SourcesController(const AppConfig &config,
     mWindowEnd = QDateTime::currentDateTime();
     mWindowStart = mWindowEnd.addDays(-1);
     mActivePreset = QStringLiteral("24h");
+    mLocalDiskPath = mConfig.localOutputPath.isEmpty()
+                         ? ConfigStore::expandTilde(QStringLiteral("~/DataCollector"))
+                         : mConfig.localOutputPath;
+    queryLocalDiskSpace(mLocalDiskPath, &mLocalDiskFreeBytes, &mLocalDiskTotalBytes);
 
     mPcModel.initializePcs(mConfig.pcs);
 
@@ -345,6 +390,9 @@ qint64 SourcesController::selectedBytes() const {
 }
 
 int SourcesController::driveState() const {
+    if (mUseLocalDisk) {
+        return (!mLocalDiskPath.isEmpty() && mLocalDiskFreeBytes > 0) ? Ready : None;
+    }
     const int n = mDriveModel.items().size();
     if (n == 0) {
         return None;
@@ -356,6 +404,16 @@ int SourcesController::driveState() const {
 }
 
 QVariantMap SourcesController::currentDrive() const {
+    if (mUseLocalDisk) {
+        return {
+            {QStringLiteral("device"), QString()},
+            {QStringLiteral("label"), QStringLiteral("Local disk")},
+            {QStringLiteral("mountPoint"), mLocalDiskPath},
+            {QStringLiteral("freeBytes"), mLocalDiskFreeBytes},
+            {QStringLiteral("totalBytes"), mLocalDiskTotalBytes},
+            {QStringLiteral("isLocal"), true}
+        };
+    }
     const QVector<DriveListModel::Item> &list = mDriveModel.items();
     if (mSelectedDriveIndex < 0 || mSelectedDriveIndex >= list.size()) {
         return {};
@@ -366,11 +424,15 @@ QVariantMap SourcesController::currentDrive() const {
         {QStringLiteral("label"), d.label},
         {QStringLiteral("mountPoint"), d.mountPoint},
         {QStringLiteral("freeBytes"), d.freeBytes},
-        {QStringLiteral("totalBytes"), d.totalBytes}
+        {QStringLiteral("totalBytes"), d.totalBytes},
+        {QStringLiteral("isLocal"), false}
     };
 }
 
 qint64 SourcesController::freeBytes() const {
+    if (mUseLocalDisk) {
+        return mLocalDiskFreeBytes;
+    }
     const QVector<DriveListModel::Item> &list = mDriveModel.items();
     if (mSelectedDriveIndex < 0 || mSelectedDriveIndex >= list.size()) {
         return 0;
@@ -379,6 +441,16 @@ qint64 SourcesController::freeBytes() const {
 }
 
 QString SourcesController::destinationPreview() const {
+    if (mUseLocalDisk) {
+        if (mLocalDiskPath.isEmpty()) {
+            return QStringLiteral("not set");
+        }
+        QString base = mLocalDiskPath;
+        while (base.endsWith(QLatin1Char('/')) && base.size() > 1) {
+            base.chop(1);
+        }
+        return base + QStringLiteral("/collect_<timestamp>/");
+    }
     const QVector<DriveListModel::Item> &list = mDriveModel.items();
     if (mSelectedDriveIndex < 0 || mSelectedDriveIndex >= list.size()) {
         return QStringLiteral("not set");
@@ -458,9 +530,14 @@ void SourcesController::rescanPcs() {
 }
 
 void SourcesController::rescanDrives() {
+    queryLocalDiskSpace(mLocalDiskPath, &mLocalDiskFreeBytes, &mLocalDiskTotalBytes);
     if (mUsbMonitor != nullptr) {
         mUsbMonitor->rescan();
         mUsbMonitor->refreshFreeSpace();
+        if (mUseLocalDisk) {
+            emit drivesChanged();
+            recalculateEstimate();
+        }
     } else {
         emit drivesChanged();
         recalculateEstimate();
@@ -528,16 +605,32 @@ void SourcesController::applyPreset(const QString &name) {
 }
 
 void SourcesController::selectDrive(int index) {
-    if (mUsbMonitor != nullptr) {
-        mUsbMonitor->selectDrive(index);
-        return;
-    }
     const QVector<DriveListModel::Item> &list = mDriveModel.items();
     if (index < 0 || index >= list.size()) {
         return;
     }
+    mUseLocalDisk = false;
     mSelectedDriveIndex = index;
+    if (mUsbMonitor != nullptr) {
+        mUsbMonitor->selectDrive(index);
+    }
     mDriveModel.setSelectedIndex(index);
+    emit drivesChanged();
+    recalculateEstimate();
+}
+
+void SourcesController::selectLocalDisk(const QString &path) {
+    QString target = path.trimmed();
+    if (target.isEmpty()) {
+        target = mLocalDiskPath;
+    } else {
+        target = QDir::cleanPath(ConfigStore::expandTilde(target));
+    }
+    mUseLocalDisk = true;
+    mLocalDiskPath = target;
+    mSelectedDriveIndex = -1;
+    mDriveModel.setSelectedIndex(-1);
+    queryLocalDiskSpace(mLocalDiskPath, &mLocalDiskFreeBytes, &mLocalDiskTotalBytes);
     emit drivesChanged();
     recalculateEstimate();
 }
@@ -548,13 +641,16 @@ void SourcesController::startCopy() {
         return;
     }
 
-    // 1. Re-read USB free space right before starting
-    if (mUsbMonitor != nullptr) {
+    // 1. Re-read destination free space right before starting
+    if (mUseLocalDisk) {
+        queryLocalDiskSpace(mLocalDiskPath, &mLocalDiskFreeBytes, &mLocalDiskTotalBytes);
+        emit drivesChanged();
+    } else if (mUsbMonitor != nullptr) {
         mUsbMonitor->refreshFreeSpace();
         onUsbDrivesChanged();
     }
 
-    // 2. Re-validate time window, selection, USB drive, and space estimate
+    // 2. Re-validate time window, selection, destination, and space estimate
     const TimeWindow win = timeWindow();
     if (!win.isValid()) {
         emit startError(QStringLiteral("The selected time range is invalid. Start time must be before end time."));
@@ -566,13 +662,25 @@ void SourcesController::startCopy() {
         return;
     }
 
-    const QVector<DriveListModel::Item> &drivesList = mDriveModel.items();
-    if (mSelectedDriveIndex < 0 || mSelectedDriveIndex >= drivesList.size()) {
-        emit startError(QStringLiteral("No USB drive is connected. Plug in a USB drive and try again."));
-        return;
+    UsbDrive targetDrive;
+    if (mUseLocalDisk) {
+        if (mLocalDiskPath.isEmpty() || mLocalDiskFreeBytes <= 0) {
+            emit startError(QStringLiteral("No valid local destination folder is configured."));
+            return;
+        }
+        targetDrive = UsbDrive{QString(),
+                               QStringLiteral("Local disk"),
+                               mLocalDiskPath,
+                               mLocalDiskFreeBytes,
+                               mLocalDiskTotalBytes};
+    } else {
+        const QVector<DriveListModel::Item> &drivesList = mDriveModel.items();
+        if (mSelectedDriveIndex < 0 || mSelectedDriveIndex >= drivesList.size()) {
+            emit startError(QStringLiteral("No USB drive is connected. Plug in a USB drive or choose a local folder."));
+            return;
+        }
+        targetDrive = drivesList.at(mSelectedDriveIndex).drive;
     }
-
-    const UsbDrive targetDrive = drivesList.at(mSelectedDriveIndex).drive;
 
     QVector<qint64> selectedSizes;
     for (const PcListModel::Item &it : mPcModel.items()) {
@@ -582,7 +690,7 @@ void SourcesController::startCopy() {
     }
     const SpaceEstimate est = SpaceEstimator::estimate(selectedSizes,
                                                        targetDrive.freeBytes,
-                                                       kSpaceMarginFraction);
+                                                       SpaceEstimator::kDefaultMarginFraction);
     mFits = est.fits;
     mFittingPcCount = est.fittingPcCount;
     emit estimateChanged();
@@ -590,7 +698,7 @@ void SourcesController::startCopy() {
 
     if (!est.fits) {
         emit startError(QStringLiteral("Not enough free space on %1 for the selected PCs.")
-                            .arg(targetDrive.label.isEmpty() ? QStringLiteral("the USB drive") : targetDrive.label));
+                            .arg(targetDrive.label.isEmpty() ? QStringLiteral("the destination") : targetDrive.label));
         return;
     }
 
@@ -603,8 +711,11 @@ void SourcesController::startCopy() {
     const QString sessionDir = mountPoint + QStringLiteral("/collect_") + stamp;
 
     if (!QDir().mkpath(sessionDir)) {
-        emit startError(QStringLiteral("Could not create destination folder on %1. Check that the drive is mounted and writable.")
-                            .arg(targetDrive.mountPoint));
+        emit startError(mUseLocalDisk
+                            ? QStringLiteral("Could not create destination folder in %1. Check folder permissions.")
+                                  .arg(targetDrive.mountPoint)
+                            : QStringLiteral("Could not create destination folder on %1. Check that the drive is mounted and writable.")
+                                  .arg(targetDrive.mountPoint));
         return;
     }
 
@@ -612,8 +723,11 @@ void SourcesController::startCopy() {
     QFile probeFile(probeFilePath);
     if (!probeFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         QDir().rmdir(sessionDir);
-        emit startError(QStringLiteral("The USB drive at %1 is not writable. Check drive permissions or mount options.")
-                            .arg(targetDrive.mountPoint));
+        emit startError(mUseLocalDisk
+                            ? QStringLiteral("The local folder %1 is not writable. Check folder permissions.")
+                                  .arg(targetDrive.mountPoint)
+                            : QStringLiteral("The USB drive at %1 is not writable. Check drive permissions or mount options.")
+                                  .arg(targetDrive.mountPoint));
         return;
     }
     probeFile.close();
@@ -654,6 +768,7 @@ void SourcesController::startCopy() {
     mPreparedSessionDir = sessionDir;
     mPreparedJobs = jobs;
     mPreparedDrive = targetDrive;
+    mPreparedIsLocalDisk = mUseLocalDisk;
 
     // 5. Transition to progress view
     emit copyRequested();
@@ -814,13 +929,22 @@ void SourcesController::onUsbDrivesChanged() {
         return;
     }
     const QVector<UsbDrive> drivesList = mUsbMonitor->drives();
-    mSelectedDriveIndex = mUsbMonitor->selectedIndex();
-    mDriveModel.syncDrives(drivesList, mSelectedDriveIndex);
+    if (mUseLocalDisk) {
+        mSelectedDriveIndex = -1;
+        mDriveModel.syncDrives(drivesList, -1);
+        queryLocalDiskSpace(mLocalDiskPath, &mLocalDiskFreeBytes, &mLocalDiskTotalBytes);
+    } else {
+        mSelectedDriveIndex = mUsbMonitor->selectedIndex();
+        mDriveModel.syncDrives(drivesList, mSelectedDriveIndex);
+    }
     emit drivesChanged();
     recalculateEstimate();
 }
 
 void SourcesController::onUsbFreeSpaceUpdated(qint64 freeBytes) {
+    if (mUseLocalDisk) {
+        return;
+    }
     if (mSelectedDriveIndex >= 0 && mSelectedDriveIndex < mDriveModel.items().size()) {
         mDriveModel.updateFreeBytes(mSelectedDriveIndex, freeBytes);
     }
@@ -837,7 +961,9 @@ void SourcesController::recalculateEstimate() {
         }
     }
 
-    const SpaceEstimate est = SpaceEstimator::estimate(selectedSizes, free, kSpaceMarginFraction);
+    const SpaceEstimate est = SpaceEstimator::estimate(selectedSizes,
+                                                       free,
+                                                       SpaceEstimator::kDefaultMarginFraction);
     const bool newFits = (driveState() != None) && est.fits;
     const int newFitCount = (driveState() != None) ? est.fittingPcCount : 0;
 

@@ -1,6 +1,10 @@
 #include "StubControllers.h"
+#include "core/ConfigStore.h"
 
 #include <QDate>
+#include <QDir>
+#include <QFileInfo>
+#include <QStorageInfo>
 #include <QTime>
 
 #include <algorithm>
@@ -11,8 +15,39 @@ namespace dc {
 namespace {
 constexpr qint64 kMb = 1000LL * 1000LL;
 constexpr qint64 kGb = 1000LL * 1000LL * 1000LL;
+constexpr qint64 kFallbackLocalFreeBytes = 250LL * kGb;
+constexpr qint64 kFallbackLocalTotalBytes = 500LL * kGb;
 constexpr int kMaxFailuresBeforeThrottle = 5;
 constexpr int kThrottleDurationSeconds = 30;
+
+void queryStubLocalDiskSpace(const QString &path, qint64 *outFree, qint64 *outTotal) {
+    QString probe = QDir::cleanPath(path);
+    while (!probe.isEmpty() && !QDir(probe).exists()) {
+        const QString parent = QFileInfo(probe).path();
+        if (parent == probe) {
+            break;
+        }
+        probe = parent;
+    }
+    if (!probe.isEmpty() && QDir(probe).exists()) {
+        const QStorageInfo storage(probe);
+        if (storage.isValid() && storage.isReady() && storage.bytesAvailable() > 0) {
+            if (outFree != nullptr) {
+                *outFree = storage.bytesAvailable();
+            }
+            if (outTotal != nullptr) {
+                *outTotal = storage.bytesTotal();
+            }
+            return;
+        }
+    }
+    if (outFree != nullptr) {
+        *outFree = kFallbackLocalFreeBytes;
+    }
+    if (outTotal != nullptr) {
+        *outTotal = kFallbackLocalTotalBytes;
+    }
+}
 } // namespace
 
 // ============================================================================
@@ -343,6 +378,9 @@ void StubSourcesController::populateMockData() {
     };
     mDriveModel.setItems(drives);
     mSelectedDriveIndex = 0;
+    mUseLocalDisk = false;
+    mLocalDiskPath = ConfigStore::expandTilde(QStringLiteral("~/DataCollector"));
+    queryStubLocalDiskSpace(mLocalDiskPath, &mLocalDiskFreeBytes, &mLocalDiskTotalBytes);
 }
 
 void StubSourcesController::applyMediaOptionsToModel() {
@@ -446,6 +484,9 @@ qint64 StubSourcesController::selectedBytes() const {
 }
 
 int StubSourcesController::driveState() const {
+    if (mUseLocalDisk) {
+        return (!mLocalDiskPath.isEmpty() && mLocalDiskFreeBytes > 0) ? Ready : None;
+    }
     const int n = mDriveModel.items().size();
     if (n == 0) {
         return None;
@@ -457,6 +498,16 @@ int StubSourcesController::driveState() const {
 }
 
 QVariantMap StubSourcesController::currentDrive() const {
+    if (mUseLocalDisk) {
+        return {
+            {QStringLiteral("device"), QString()},
+            {QStringLiteral("label"), QStringLiteral("Local disk")},
+            {QStringLiteral("mountPoint"), mLocalDiskPath},
+            {QStringLiteral("freeBytes"), mLocalDiskFreeBytes},
+            {QStringLiteral("totalBytes"), mLocalDiskTotalBytes},
+            {QStringLiteral("isLocal"), true}
+        };
+    }
     const QVector<StubDriveModel::Item> &list = mDriveModel.items();
     if (mSelectedDriveIndex < 0 || mSelectedDriveIndex >= list.size()) {
         return {};
@@ -467,11 +518,15 @@ QVariantMap StubSourcesController::currentDrive() const {
         {QStringLiteral("label"), d.label},
         {QStringLiteral("mountPoint"), d.mountPoint},
         {QStringLiteral("freeBytes"), d.freeBytes},
-        {QStringLiteral("totalBytes"), d.totalBytes}
+        {QStringLiteral("totalBytes"), d.totalBytes},
+        {QStringLiteral("isLocal"), false}
     };
 }
 
 qint64 StubSourcesController::freeBytes() const {
+    if (mUseLocalDisk) {
+        return mLocalDiskFreeBytes;
+    }
     const QVector<StubDriveModel::Item> &list = mDriveModel.items();
     if (mSelectedDriveIndex < 0 || mSelectedDriveIndex >= list.size()) {
         return 0;
@@ -480,6 +535,16 @@ qint64 StubSourcesController::freeBytes() const {
 }
 
 QString StubSourcesController::destinationPreview() const {
+    if (mUseLocalDisk) {
+        if (mLocalDiskPath.isEmpty()) {
+            return QStringLiteral("not set");
+        }
+        QString base = mLocalDiskPath;
+        while (base.endsWith(QLatin1Char('/')) && base.size() > 1) {
+            base.chop(1);
+        }
+        return base + QStringLiteral("/collect_<timestamp>/");
+    }
     const QVector<StubDriveModel::Item> &list = mDriveModel.items();
     if (mSelectedDriveIndex < 0 || mSelectedDriveIndex >= list.size()) {
         return QStringLiteral("not set");
@@ -562,8 +627,25 @@ void StubSourcesController::selectDrive(int index) {
     if (index < 0 || index >= list.size()) {
         return;
     }
+    mUseLocalDisk = false;
     mSelectedDriveIndex = index;
     mDriveModel.setSelectedIndex(index);
+    emit drivesChanged();
+    recalculateEstimate();
+}
+
+void StubSourcesController::selectLocalDisk(const QString &path) {
+    QString target = path.trimmed();
+    if (target.isEmpty()) {
+        target = mLocalDiskPath;
+    } else {
+        target = QDir::cleanPath(ConfigStore::expandTilde(target));
+    }
+    mUseLocalDisk = true;
+    mLocalDiskPath = target;
+    mSelectedDriveIndex = -1;
+    mDriveModel.setSelectedIndex(-1);
+    queryStubLocalDiskSpace(mLocalDiskPath, &mLocalDiskFreeBytes, &mLocalDiskTotalBytes);
     emit drivesChanged();
     recalculateEstimate();
 }
@@ -618,6 +700,9 @@ StubTransferController::StubTransferController(QObject *parent)
 }
 
 bool StubTransferController::canEject() const {
+    if (mIsLocalDestination) {
+        return false;
+    }
     return mPhase == Finished || mPhase == FinishedWithWarnings || mPhase == Cancelled;
 }
 
@@ -627,9 +712,13 @@ void StubTransferController::startFromSources(const StubSourcesController *sourc
     mEjectStatus.clear();
     mEjectError = false;
     mTickCounter = 0;
+    mIsLocalDestination = sources->useLocalDisk();
 
     const QVariantMap drive = sources->currentDrive();
-    const QString mount = drive.value(QStringLiteral("mountPoint"), QStringLiteral("/media/usb")).toString();
+    QString mount = drive.value(QStringLiteral("mountPoint"), QStringLiteral("/media/usb")).toString();
+    while (mount.endsWith(QLatin1Char('/')) && mount.size() > 1) {
+        mount.chop(1);
+    }
     mSessionPath = mount + QStringLiteral("/collect_")
                    + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss"));
     mWindowSummary = sources->windowStart().toString(QStringLiteral("yyyy-MM-dd HH:mm"))

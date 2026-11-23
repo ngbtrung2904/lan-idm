@@ -2,6 +2,7 @@
   "sshUser": "user",
   "sshKeyPath": "~/.local/share/DataCollector/collector_key",
   "knownHostsPath": "~/.local/share/DataCollector/known_hosts",
+  "localOutputPath": "~/DataCollector",
   "maxParallel": 2,
   "paths": {
     "logs": ".app",

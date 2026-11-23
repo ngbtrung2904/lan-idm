@@ -134,6 +134,9 @@ class SourcesController : public QObject {
     Q_PROPERTY(int driveState READ driveState NOTIFY drivesChanged)
     Q_PROPERTY(QVariantMap currentDrive READ currentDrive NOTIFY drivesChanged)
     Q_PROPERTY(qint64 freeBytes READ freeBytes NOTIFY drivesChanged)
+    Q_PROPERTY(bool useLocalDisk READ useLocalDisk NOTIFY drivesChanged)
+    Q_PROPERTY(QString localDiskPath READ localDiskPath NOTIFY drivesChanged)
+    Q_PROPERTY(qint64 localDiskFreeBytes READ localDiskFreeBytes NOTIFY drivesChanged)
     Q_PROPERTY(bool fits READ fits NOTIFY estimateChanged)
     Q_PROPERTY(int fittingPcCount READ fittingPcCount NOTIFY estimateChanged)
     Q_PROPERTY(QString destinationPreview READ destinationPreview NOTIFY drivesChanged)
@@ -175,6 +178,9 @@ public:
     int driveState() const;
     QVariantMap currentDrive() const;
     qint64 freeBytes() const;
+    bool useLocalDisk() const { return mUseLocalDisk; }
+    QString localDiskPath() const { return mLocalDiskPath; }
+    qint64 localDiskFreeBytes() const { return mLocalDiskFreeBytes; }
     bool fits() const { return mFits; }
     int fittingPcCount() const { return mFittingPcCount; }
     QString destinationPreview() const;
@@ -190,6 +196,7 @@ public:
     QString preparedSessionDir() const { return mPreparedSessionDir; }
     const QVector<TransferJobSpec> &preparedJobs() const { return mPreparedJobs; }
     UsbDrive preparedDrive() const { return mPreparedDrive; }
+    bool preparedIsLocalDisk() const { return mPreparedIsLocalDisk; }
 
     void cancelPending();
 
@@ -199,6 +206,7 @@ public:
     Q_INVOKABLE void selectAll(bool selected);
     Q_INVOKABLE void applyPreset(const QString &name);
     Q_INVOKABLE void selectDrive(int index);
+    Q_INVOKABLE void selectLocalDisk(const QString &path);
     Q_INVOKABLE void startCopy();
 
 signals:
@@ -248,6 +256,10 @@ private:
     QHash<QString, FilteredPc> mFiltered;
 
     int mSelectedDriveIndex = -1;
+    bool mUseLocalDisk = false;
+    QString mLocalDiskPath;
+    qint64 mLocalDiskFreeBytes = 0;
+    qint64 mLocalDiskTotalBytes = 0;
     bool mIncludePictures = true;
     bool mIncludeRecordings = false;
     bool mFits = false;
@@ -257,6 +269,7 @@ private:
     QString mPreparedSessionDir;
     QVector<TransferJobSpec> mPreparedJobs;
     UsbDrive mPreparedDrive;
+    bool mPreparedIsLocalDisk = false;
 };
 
 } // namespace dc

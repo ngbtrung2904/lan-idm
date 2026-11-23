@@ -215,6 +215,9 @@ class StubSourcesController : public QObject {
     Q_PROPERTY(int driveState READ driveState NOTIFY drivesChanged)
     Q_PROPERTY(QVariantMap currentDrive READ currentDrive NOTIFY drivesChanged)
     Q_PROPERTY(qint64 freeBytes READ freeBytes NOTIFY drivesChanged)
+    Q_PROPERTY(bool useLocalDisk READ useLocalDisk NOTIFY drivesChanged)
+    Q_PROPERTY(QString localDiskPath READ localDiskPath NOTIFY drivesChanged)
+    Q_PROPERTY(qint64 localDiskFreeBytes READ localDiskFreeBytes NOTIFY drivesChanged)
     Q_PROPERTY(bool fits READ fits NOTIFY estimateChanged)
     Q_PROPERTY(int fittingPcCount READ fittingPcCount NOTIFY estimateChanged)
     Q_PROPERTY(QString destinationPreview READ destinationPreview NOTIFY drivesChanged)
@@ -253,6 +256,9 @@ public:
     int driveState() const;
     QVariantMap currentDrive() const;
     qint64 freeBytes() const;
+    bool useLocalDisk() const { return mUseLocalDisk; }
+    QString localDiskPath() const { return mLocalDiskPath; }
+    qint64 localDiskFreeBytes() const { return mLocalDiskFreeBytes; }
     bool fits() const { return mFits; }
     int fittingPcCount() const { return mFittingPcCount; }
     QString destinationPreview() const;
@@ -269,6 +275,7 @@ public:
     Q_INVOKABLE void selectAll(bool selected);
     Q_INVOKABLE void applyPreset(const QString &name);
     Q_INVOKABLE void selectDrive(int index);
+    Q_INVOKABLE void selectLocalDisk(const QString &path);
     Q_INVOKABLE void startCopy();
 
 signals:
@@ -294,6 +301,10 @@ private:
     QDateTime mWindowEnd;
     QString mActivePreset = QStringLiteral("7d");
     int mSelectedDriveIndex = 0;
+    bool mUseLocalDisk = false;
+    QString mLocalDiskPath;
+    qint64 mLocalDiskFreeBytes = 0;
+    qint64 mLocalDiskTotalBytes = 0;
     bool mIncludePictures = true;
     bool mIncludeRecordings = false;
     bool mFits = true;
@@ -316,6 +327,7 @@ class StubTransferController : public QObject {
     Q_PROPERTY(QString sessionPath READ sessionPath NOTIFY sessionChanged)
     Q_PROPERTY(QString windowSummary READ windowSummary NOTIFY sessionChanged)
     Q_PROPERTY(int selectedPcCount READ selectedPcCount NOTIFY sessionChanged)
+    Q_PROPERTY(bool isLocalDestination READ isLocalDestination NOTIFY sessionChanged)
     Q_PROPERTY(bool canEject READ canEject NOTIFY phaseChanged)
     Q_PROPERTY(QString ejectStatus READ ejectStatus NOTIFY ejectStatusChanged)
     Q_PROPERTY(bool ejectError READ ejectError NOTIFY ejectStatusChanged)
@@ -345,6 +357,7 @@ public:
     QString sessionPath() const { return mSessionPath; }
     QString windowSummary() const { return mWindowSummary; }
     int selectedPcCount() const { return mSelectedPcCount; }
+    bool isLocalDestination() const { return mIsLocalDestination; }
     bool canEject() const;
     QString ejectStatus() const { return mEjectStatus; }
     bool ejectError() const { return mEjectError; }
@@ -381,6 +394,7 @@ private:
     QString mSessionPath;
     QString mWindowSummary;
     int mSelectedPcCount = 0;
+    bool mIsLocalDestination = false;
     QString mEjectStatus;
     bool mEjectError = false;
     int mTickCounter = 0;

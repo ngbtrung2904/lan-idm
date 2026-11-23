@@ -4,11 +4,13 @@ Data Collector copies application logs and screenshots from headless PCs onto a 
 
 ---
 
-## 1. Plug in a USB drive
+## 1. Choose a destination (USB drive or local disk)
 
-- Insert a writable USB drive into the desktop before or after opening the app.
-- The drive is detected automatically and shown in the top-right header chip (**USB ready** with mount path and free space).
-- If multiple USB drives are plugged in, click the header chip to choose the target drive from the dropdown, or click **Rescan drives** if a drive was just inserted.
+- **USB drive (default):** Insert a writable USB drive into the desktop before or after opening the app. The drive is detected automatically and shown in the top-right header chip (**USB ready** with mount path and free space). If multiple USB drives are plugged in, click the header chip to choose the target drive from the dropdown, or click **Rescan drives** if a drive was just inserted.
+- **Local disk folder:** If no USB drive is attached—or if you prefer to save directly onto the operator desktop—click the destination chip in the header (or the **Save to local disk** action in the no-USB banner) and choose **Local disk**.
+  - By default, local collections are saved under `~/DataCollector` (configurable via `"localOutputPath"` in `config.json`). You can also enter or browse to a different local folder before starting the copy.
+  - While Local Disk mode is active, plugging or unplugging a USB drive will not interrupt or steal the active destination.
+  - Because no removable drive is used, **Eject USB safely** is not shown after a local disk copy finishes.
 
 ## 2. Open Data Collector & Sign in
 

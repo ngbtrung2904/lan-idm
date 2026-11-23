@@ -151,6 +151,18 @@ bool ConfigStore::parseJson(const QByteArray &jsonData, AppConfig *outConfig, QS
         cfg.knownHostsPath = expandTilde(v.toString().trimmed());
     }
 
+    // localOutputPath (optional, defaults to "~/DataCollector")
+    if (root.contains(QStringLiteral("localOutputPath"))) {
+        const QJsonValue v = root.value(QStringLiteral("localOutputPath"));
+        if (!v.isString() || v.toString().trimmed().isEmpty()) {
+            setError(error, QStringLiteral("Missing or invalid key: localOutputPath"));
+            return false;
+        }
+        cfg.localOutputPath = expandTilde(v.toString().trimmed());
+    } else {
+        cfg.localOutputPath = expandTilde(QStringLiteral("~/DataCollector"));
+    }
+
     // maxParallel (optional, default 2, must be integer >= 1)
     if (root.contains(QStringLiteral("maxParallel"))) {
         int val = 0;

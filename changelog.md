@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0] - 2026-11-23
+
+### Features
+- **Local Disk Destination Mode**:
+  - `src/core/Types.h` & `src/core/ConfigStore.cpp`: Added optional `localOutputPath` to `AppConfig` (defaults to expanded `~/DataCollector`, rejects empty or non-string values).
+  - `src/app/SourcesController.{h,cpp}`: Added `useLocalDisk`, `localDiskPath`, and `localDiskFreeBytes` properties, `selectLocalDisk(path)` invokable, nearest-ancestor `QStorageInfo` free-space querying, non-stealing USB hotplug behavior while in Local Disk mode, and local session folder creation/writability checks in `startCopy()`.
+  - `src/app/TransferController.{h,cpp}`: Added `isLocalDestination` property, disabled `canEject()` in Local Disk mode, ignored unrelated USB removal events during local disk transfers, and enabled direct retry when `isLocalDestination` is true.
+  - `src/app/stubs/StubControllers.{h,cpp}`: Added matching `useLocalDisk`, `localDiskPath`, `localDiskFreeBytes`, `selectLocalDisk(path)`, and `isLocalDestination` contracts for `--demo` mode.
+  - `config.example.json`, `docs/interfaces.md`, & `docs/user-guide.md`: Added `"localOutputPath": "~/DataCollector"` to example config and documented Local Disk destination contracts and operator workflow.
+  - `tests/unit/test_core_remote.cpp`: Added `configStoreLocalOutputPath` unit test covering default expansion, explicit tilde/absolute overrides, and empty/non-string rejection.
+
 ## [0.4.0] - 2026-11-21
 
 ### Features

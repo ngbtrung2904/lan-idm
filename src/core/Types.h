@@ -70,6 +70,7 @@ struct AppConfig {
     QString sshUser = QStringLiteral("user");
     QString sshKeyPath;
     QString knownHostsPath;
+    QString localOutputPath;
     int maxParallel = 2;
     PathsConfig paths;
     LogsConfig logs;

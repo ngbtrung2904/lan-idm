@@ -61,7 +61,7 @@ ColumnLayout {
         if (isUsbRemoved) return qsTr("Copy paused — USB removed");
         if (isCancelling) return qsTr("Cancelling copy...");
         if (isCancelled) return qsTr("Copy cancelled");
-        return qsTr("Copying to USB");
+        return transferController.isLocalDestination ? qsTr("Copying to local disk") : qsTr("Copying to USB");
     }
 
     function headingSubtitle() {
@@ -77,7 +77,9 @@ ColumnLayout {
         if (isUsbRemoved) {
             return prefix + " \u00B7 " + qsTr("Reconnect the USB drive to continue.");
         }
-        return prefix + " \u00B7 " + qsTr("Keep the USB drive plugged in until all copies finish.");
+        return prefix + " \u00B7 " + (transferController.isLocalDestination
+                                      ? qsTr("Saving to local disk.")
+                                      : qsTr("Keep the USB drive plugged in until all copies finish."));
     }
 
     // Header (non-interactive USB pill, no Sign out while copying)
@@ -90,6 +92,8 @@ ColumnLayout {
         driveState: isUsbRemoved ? 0 : sourcesController.driveState
         currentDrive: sourcesController.currentDrive
         drivesModel: sourcesController.drives
+        useLocalDisk: transferController.isLocalDestination
+        localDiskPath: sourcesController.localDiskPath
     }
 
     // Scrollable main area
@@ -697,6 +701,7 @@ ColumnLayout {
                 }
 
                 PrimaryButton {
+                    visible: !transferController.isLocalDestination
                     text: qsTr("Eject USB safely")
                     implicitWidth: 160
                     enabled: transferController.canEject
@@ -740,7 +745,9 @@ ColumnLayout {
         contentItem: Text {
             leftPadding: 24
             rightPadding: 24
-            text: qsTr("Active file transfers will be stopped. Already completed files will remain on the USB drive.")
+            text: transferController.isLocalDestination
+                  ? qsTr("Active file transfers will be stopped. Already completed files will remain in the local folder.")
+                  : qsTr("Active file transfers will be stopped. Already completed files will remain on the USB drive.")
             font.family: Theme.fontSans
             font.pixelSize: 14
             color: Theme.muted

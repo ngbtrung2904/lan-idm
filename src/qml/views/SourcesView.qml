@@ -46,9 +46,14 @@ ColumnLayout {
         driveState: sourcesController.driveState
         currentDrive: sourcesController.currentDrive
         drivesModel: sourcesController.drives
+        useLocalDisk: sourcesController.useLocalDisk
+        localDiskPath: sourcesController.localDiskPath
+        localDiskFreeBytes: sourcesController.localDiskFreeBytes
         onDriveSelected: function(idx) { sourcesController.selectDrive(idx); }
         onRescanDrivesClicked: sourcesController.rescanDrives()
         onSignOutClicked: authController.lock()
+        onSelectLocalDiskClicked: sourcesController.selectLocalDisk(sourcesController.localDiskPath)
+        onChangeLocalFolderClicked: localFolderDialog.open()
     }
 
     // Scrollable body
@@ -98,16 +103,24 @@ ColumnLayout {
 
             // Conditional alert banner: No USB
             AlertBanner {
-                visible: sourcesController.driveState === 0
+                visible: sourcesController.driveState === 0 && !sourcesController.useLocalDisk
                 Layout.fillWidth: true
                 tone: "warning"
                 title: qsTr("No USB drive detected")
                 body: qsTr("Plug in a USB drive and it will be picked up automatically. You can still choose a time range and PCs while you wait.")
+
+                OutlineButton {
+                    text: qsTr("Use local disk")
+                    variant: "primary"
+                    accessibleLabel: qsTr("Use local disk")
+                    onClicked: sourcesController.selectLocalDisk(sourcesController.localDiskPath)
+                }
             }
 
             // Conditional alert banner: Not enough space
             AlertBanner {
-                visible: sourcesController.driveState !== 0 && !sourcesController.fits && sourcesController.selectedCount > 0
+                visible: (sourcesController.driveState !== 0 || sourcesController.useLocalDisk)
+                         && !sourcesController.fits && sourcesController.selectedCount > 0
                 Layout.fillWidth: true
                 tone: "error"
                 title: qsTr("Not enough space on %1").arg(sourcesController.currentDrive.label || qsTr("USB drive"))
@@ -847,7 +860,7 @@ ColumnLayout {
                         }
 
                         Text {
-                            text: sourcesController.driveState === 0
+                            text: (sourcesController.driveState === 0 && !sourcesController.useLocalDisk)
                                   ? qsTr("Destination: not set")
                                   : qsTr("Destination %1").arg(sourcesController.destinationPreview)
                             font.family: Theme.fontSans
@@ -863,7 +876,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 8
 
-                        readonly property bool overSpace: sourcesController.driveState !== 0
+                        readonly property bool overSpace: (sourcesController.driveState !== 0 || sourcesController.useLocalDisk)
                                                           && !sourcesController.fits
                                                           && sourcesController.selectedCount > 0
 
@@ -883,7 +896,7 @@ ColumnLayout {
                             Item { Layout.fillWidth: true }
 
                             Text {
-                                text: sourcesController.driveState === 0
+                                text: (sourcesController.driveState === 0 && !sourcesController.useLocalDisk)
                                       ? qsTr("No drive to compare against")
                                       : parent.parent.overSpace
                                         ? qsTr("%1 free").arg(Fmt.formatBytes(sourcesController.freeBytes))
@@ -907,7 +920,8 @@ ColumnLayout {
                                 height: parent.height
                                 radius: 4
                                 width: {
-                                    if (sourcesController.driveState === 0 || sourcesController.selectedCount === 0) {
+                                    if ((sourcesController.driveState === 0 && !sourcesController.useLocalDisk)
+                                        || sourcesController.selectedCount === 0) {
                                         return 0;
                                     }
                                     if (!sourcesController.fits) {
@@ -934,6 +948,123 @@ ColumnLayout {
                         enabled: sourcesController.canStart
                         accessibleLabel: qsTr("Start copy")
                         onClicked: sourcesController.startCopy()
+                    }
+                }
+            }
+        }
+    }
+
+    // Choose local folder modal dialog
+    Dialog {
+        id: localFolderDialog
+        anchors.centerIn: Overlay.overlay
+        width: 460
+        modal: true
+        title: qsTr("Choose local folder")
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        onOpened: {
+            localPathInput.text = sourcesController.localDiskPath;
+            localPathInput.forceActiveFocus();
+            localPathInput.selectAll();
+        }
+
+        background: Rectangle {
+            color: Theme.panel
+            radius: Theme.radiusCard
+            border.color: Theme.border
+            border.width: 1
+        }
+
+        header: Item {
+            implicitHeight: 52
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 24
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("Choose local folder")
+                font.family: Theme.fontSans
+                font.pixelSize: 18
+                font.weight: Font.Bold
+                color: Theme.text
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            Text {
+                Layout.fillWidth: true
+                Layout.leftMargin: 24
+                Layout.rightMargin: 24
+                text: qsTr("Collections will be saved into a timestamped collect_<date_time> folder inside this path.")
+                font.family: Theme.fontSans
+                font.pixelSize: 14
+                color: Theme.muted
+                wrapMode: Text.WordWrap
+            }
+
+            TextField {
+                id: localPathInput
+                Layout.fillWidth: true
+                Layout.leftMargin: 24
+                Layout.rightMargin: 24
+                implicitHeight: Theme.minHitTarget
+                leftPadding: 12
+                rightPadding: 12
+                font.family: Theme.fontMono
+                font.pixelSize: 13
+                color: Theme.text
+                placeholderText: "/path/to/folder"
+                placeholderTextColor: Theme.muted
+                selectionColor: Theme.primaryFill
+                selectedTextColor: Theme.textOnPrimary
+                focusPolicy: Qt.StrongFocus
+
+                Accessible.role: Accessible.EditableText
+                Accessible.name: qsTr("Local folder path")
+
+                onAccepted: {
+                    var trimmed = localPathInput.text.trim();
+                    if (trimmed.length > 0) {
+                        sourcesController.selectLocalDisk(trimmed);
+                        localFolderDialog.close();
+                    }
+                }
+
+                background: Rectangle {
+                    radius: Theme.radiusControl
+                    color: Theme.inputBg
+                    border.color: localPathInput.activeFocus ? Theme.focusRing : Theme.inputBorder
+                    border.width: localPathInput.activeFocus ? Theme.focusRingWidth : 1
+                }
+            }
+        }
+
+        footer: Item {
+            implicitHeight: 68
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                spacing: 10
+
+                Item { Layout.fillWidth: true }
+
+                OutlineButton {
+                    text: qsTr("Cancel")
+                    accessibleLabel: qsTr("Cancel")
+                    onClicked: localFolderDialog.close()
+                }
+
+                PrimaryButton {
+                    text: qsTr("Use folder")
+                    implicitWidth: 120
+                    enabled: localPathInput.text.trim().length > 0
+                    accessibleLabel: qsTr("Use folder")
+                    onClicked: {
+                        sourcesController.selectLocalDisk(localPathInput.text.trim());
+                        localFolderDialog.close();
                     }
                 }
             }

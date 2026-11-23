@@ -14,10 +14,15 @@ Rectangle {
     property int driveState: 0
     property var currentDrive: ({})
     property var drivesModel: null
+    property bool useLocalDisk: false
+    property string localDiskPath: ""
+    property real localDiskFreeBytes: 0
 
     signal driveSelected(int index)
     signal rescanDrivesClicked()
     signal signOutClicked()
+    signal selectLocalDiskClicked()
+    signal changeLocalFolderClicked()
 
     height: Theme.headerHeight
     color: Theme.panel
@@ -90,7 +95,7 @@ Rectangle {
             hoverEnabled: header.driveInteractive
 
             readonly property bool menuOpen: drivePopup.opened
-            readonly property bool hasDrive: header.driveState !== 0 && header.currentDrive && header.currentDrive.mountPoint
+            readonly property bool hasDrive: header.useLocalDisk || Boolean(header.driveState !== 0 && header.currentDrive && header.currentDrive.mountPoint)
             readonly property color pillBg: {
                 if (menuOpen) return Theme.panel;
                 if (!hasDrive) return Theme.warningBg;
@@ -108,9 +113,11 @@ Rectangle {
             }
 
             Accessible.role: header.driveInteractive ? Accessible.Button : Accessible.StaticText
-            Accessible.name: hasDrive
-                             ? (qsTr("USB drive: ") + (header.currentDrive.label || "") + " " + header.currentDrive.mountPoint)
-                             : qsTr("No USB drive detected")
+            Accessible.name: header.useLocalDisk
+                             ? (qsTr("Local disk: ") + header.localDiskPath)
+                             : hasDrive
+                               ? (qsTr("USB drive: ") + (header.currentDrive.label || "") + " " + header.currentDrive.mountPoint)
+                               : qsTr("No USB drive detected")
 
             onClicked: {
                 if (header.driveInteractive) {
@@ -171,6 +178,11 @@ Rectangle {
 
                 Text {
                     text: {
+                        if (header.useLocalDisk) {
+                            return (usbPill.menuOpen && header.currentDrive && header.currentDrive.label)
+                                   ? header.currentDrive.label
+                                   : qsTr("Local disk");
+                        }
                         if (!usbPill.hasDrive) return qsTr("No USB drive detected");
                         if (usbPill.menuOpen && header.currentDrive.label) return header.currentDrive.label;
                         return qsTr("USB ready");
@@ -184,7 +196,8 @@ Rectangle {
 
                 Text {
                     visible: usbPill.hasDrive
-                    text: header.currentDrive.mountPoint || ""
+                    text: (header.currentDrive && header.currentDrive.mountPoint)
+                          || (header.useLocalDisk ? header.localDiskPath : "")
                     font.family: Theme.fontMono
                     font.pixelSize: 12
                     color: usbPill.pillTextColor
@@ -193,7 +206,7 @@ Rectangle {
 
                 Text {
                     visible: usbPill.hasDrive && header.showFreeSpace
-                    text: Fmt.formatBytes(header.currentDrive.freeBytes) + qsTr(" free")
+                    text: Fmt.formatBytes(header.useLocalDisk ? header.localDiskFreeBytes : header.currentDrive.freeBytes) + qsTr(" free")
                     font.family: Theme.fontSans
                     font.pixelSize: 13
                     color: usbPill.pillTextColor
@@ -231,6 +244,7 @@ Rectangle {
                     spacing: 0
 
                     Repeater {
+                        id: driveRepeater
                         model: header.drivesModel
 
                         delegate: ItemDelegate {
@@ -250,12 +264,14 @@ Rectangle {
                             }
 
                             background: Rectangle {
-                                color: model.selected
+                                color: (!header.useLocalDisk && model.selected)
                                        ? Theme.primaryTint
                                        : driveRow.hovered
                                          ? Theme.hoverBg
                                          : "transparent"
                                 radius: index === 0 ? Theme.radiusCard : 0
+                                border.color: driveRow.activeFocus ? Theme.focusRing : "transparent"
+                                border.width: driveRow.activeFocus ? Theme.focusRingWidth : 0
                             }
 
                             contentItem: RowLayout {
@@ -296,7 +312,7 @@ Rectangle {
                                 }
 
                                 Text {
-                                    visible: model.selected
+                                    visible: !header.useLocalDisk && model.selected
                                     text: "\u2713"
                                     font.family: Theme.fontSans
                                     font.pixelSize: 15
@@ -309,7 +325,7 @@ Rectangle {
 
                     // Empty state when no drives
                     Item {
-                        visible: !header.drivesModel || header.driveState === 0
+                        visible: !header.drivesModel || driveRepeater.count === 0
                         Layout.fillWidth: true
                         implicitHeight: 52
 
@@ -319,6 +335,128 @@ Rectangle {
                             font.family: Theme.fontSans
                             font.pixelSize: 13
                             color: Theme.muted
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: Theme.divider
+                    }
+
+                    // Local disk destination row
+                    ItemDelegate {
+                        id: localDiskRow
+                        Layout.fillWidth: true
+                        implicitHeight: 58
+                        padding: 0
+                        hoverEnabled: true
+                        focusPolicy: Qt.StrongFocus
+
+                        Accessible.role: Accessible.MenuItem
+                        Accessible.name: qsTr("Local disk") + " " + header.localDiskPath + " "
+                                         + Fmt.formatBytes(header.localDiskFreeBytes) + " " + qsTr("free")
+
+                        onClicked: {
+                            header.selectLocalDiskClicked();
+                            drivePopup.close();
+                        }
+
+                        background: Rectangle {
+                            color: header.useLocalDisk
+                                   ? Theme.primaryTint
+                                   : localDiskRow.hovered
+                                     ? Theme.hoverBg
+                                     : "transparent"
+                            border.color: localDiskRow.activeFocus ? Theme.focusRing : "transparent"
+                            border.width: localDiskRow.activeFocus ? Theme.focusRingWidth : 0
+                        }
+
+                        contentItem: RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 16
+                            spacing: 10
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+
+                                Text {
+                                    text: qsTr("Local disk")
+                                    font.family: Theme.fontSans
+                                    font.pixelSize: 14
+                                    font.weight: Font.DemiBold
+                                    color: Theme.text
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+
+                                Text {
+                                    text: header.localDiskPath
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 12
+                                    color: Theme.muted
+                                    elide: Text.ElideMiddle
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            Text {
+                                text: Fmt.formatBytes(header.localDiskFreeBytes) + qsTr(" free")
+                                font.family: Theme.fontSans
+                                font.pixelSize: 13
+                                color: Theme.muted
+                            }
+
+                            Text {
+                                visible: header.useLocalDisk
+                                text: "\u2713"
+                                font.family: Theme.fontSans
+                                font.pixelSize: 15
+                                font.weight: Font.Bold
+                                color: Theme.primaryText
+                            }
+                        }
+                    }
+
+                    // Change local folder row
+                    ItemDelegate {
+                        id: changeLocalFolderItem
+                        Layout.fillWidth: true
+                        implicitHeight: Theme.minHitTarget
+                        padding: 0
+                        hoverEnabled: true
+                        focusPolicy: Qt.StrongFocus
+
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("Change local folder...")
+
+                        onClicked: {
+                            drivePopup.close();
+                            header.changeLocalFolderClicked();
+                        }
+
+                        background: Rectangle {
+                            color: changeLocalFolderItem.hovered ? Theme.hoverBg : "transparent"
+                            border.color: changeLocalFolderItem.activeFocus ? Theme.focusRing : "transparent"
+                            border.width: changeLocalFolderItem.activeFocus ? Theme.focusRingWidth : 0
+                        }
+
+                        contentItem: Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: 16
+                            spacing: 8
+
+                            Text {
+                                text: qsTr("Change local folder...")
+                                font.family: Theme.fontSans
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                                color: Theme.primaryText
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
                         }
                     }
 

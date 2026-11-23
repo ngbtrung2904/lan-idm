@@ -69,6 +69,7 @@ struct AppConfig {
     QString sshUser = QStringLiteral("user");
     QString sshKeyPath;
     QString knownHostsPath;
+    QString localOutputPath;
     int maxParallel = 2;
     PathsConfig paths;
     LogsConfig logs;
@@ -226,12 +227,15 @@ Properties:
 - `int selectedCount` (READ, NOTIFY `selectionChanged`)
 - `bool allOnlineSelected` (READ, NOTIFY `selectionChanged`)
 - `qint64 selectedBytes` (READ, NOTIFY `selectionChanged`)
-- `int driveState` (READ, NOTIFY `drivesChanged`) — `DriveState`
-- `QVariantMap currentDrive` (READ, NOTIFY `drivesChanged`) — keys: `device`, `label`, `mountPoint`, `freeBytes`, `totalBytes`
+- `int driveState` (READ, NOTIFY `drivesChanged`) — `DriveState` (`Ready` when local disk is selected and valid)
+- `QVariantMap currentDrive` (READ, NOTIFY `drivesChanged`) — keys: `device`, `label`, `mountPoint`, `freeBytes`, `totalBytes`, `isLocal`
 - `qint64 freeBytes` (READ, NOTIFY `drivesChanged`)
+- `bool useLocalDisk` (READ, NOTIFY `drivesChanged`) — `true` when saving to a local disk folder instead of a removable USB drive
+- `QString localDiskPath` (READ, NOTIFY `drivesChanged`) — resolved local destination folder (defaults to `config.localOutputPath`, e.g. `~/DataCollector`)
+- `qint64 localDiskFreeBytes` (READ, NOTIFY `drivesChanged`) — available bytes on the filesystem containing `localDiskPath`
 - `bool fits` (READ, NOTIFY `estimateChanged`)
 - `int fittingPcCount` (READ, NOTIFY `estimateChanged`)
-- `QString destinationPreview` (READ, NOTIFY `drivesChanged`) — e.g. `/media/usb/collect_<timestamp>/` or `not set`
+- `QString destinationPreview` (READ, NOTIFY `drivesChanged`) — e.g. `/media/usb/collect_<timestamp>/`, `/home/user/DataCollector/collect_<timestamp>/`, or `not set`
 - `bool includePictures` (READ, WRITE, NOTIFY `mediaOptionsChanged`) — default `true`
 - `bool includeRecordings` (READ, WRITE, NOTIFY `mediaOptionsChanged`) — default `false`
 - `bool canStart` (READ, NOTIFY `canStartChanged`)
@@ -243,7 +247,8 @@ Invokables:
 - `Q_INVOKABLE void setPcSelected(int index, bool selected)`
 - `Q_INVOKABLE void selectAll(bool selected)`
 - `Q_INVOKABLE void applyPreset(const QString &name)` — `"24h"`, `"7d"`, `"today"`
-- `Q_INVOKABLE void selectDrive(int index)`
+- `Q_INVOKABLE void selectDrive(int index)` — switches back to USB mode and selects drive `index`
+- `Q_INVOKABLE void selectLocalDisk(const QString &path)` — switches to Local Disk mode using `path` (expands `~`; empty string reuses `localDiskPath`)
 - `Q_INVOKABLE void startCopy()`
 
 Signals:
@@ -290,7 +295,8 @@ Properties:
 - `QString sessionPath` (READ, NOTIFY `sessionChanged`)
 - `QString windowSummary` (READ, NOTIFY `sessionChanged`) — e.g. `"2026-11-10 08:00 to 2026-11-17 17:00"`
 - `int selectedPcCount` (READ, NOTIFY `sessionChanged`)
-- `bool canEject` (READ, NOTIFY `phaseChanged`)
+- `bool isLocalDestination` (READ, NOTIFY `sessionChanged`) — `true` when the active session is writing to a local disk folder (disables USB eject and USB-unplug pause)
+- `bool canEject` (READ, NOTIFY `phaseChanged`) — always `false` when `isLocalDestination` is `true`
 - `QString ejectStatus` (READ, NOTIFY `ejectStatusChanged`)
 - `bool ejectError` (READ, NOTIFY `ejectStatusChanged`)
 

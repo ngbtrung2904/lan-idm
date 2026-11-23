@@ -26,6 +26,7 @@ private slots:
     void configStoreLogSourcesValidAndInvalid();
     void configStoreMediaPathsAndSupportsFlags();
     void configStoreUiTheme();
+    void configStoreLocalOutputPath();
 
     // SshOptions
     void sshOptionsRequiredFlagsAndNeverStrictNo();
@@ -755,6 +756,72 @@ void TestCoreRemote::configStoreUiTheme() {
             "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
         })", &cfg, &err));
         QCOMPARE(err, QStringLiteral("Missing or invalid key: ui"));
+    }
+}
+
+void TestCoreRemote::configStoreLocalOutputPath() {
+    // Default when "localOutputPath" is omitted -> expanded "~/DataCollector"
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY2(ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.localOutputPath, QDir::homePath() + QStringLiteral("/DataCollector"));
+    }
+
+    // Explicit tilde path expanded
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY2(ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "localOutputPath": "~/custom/out",
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.localOutputPath, QDir::homePath() + QStringLiteral("/custom/out"));
+    }
+
+    // Explicit absolute path preserved
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY2(ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "localOutputPath": "/var/tmp/dc-output",
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err), qPrintable(err));
+        QCOMPARE(cfg.localOutputPath, QStringLiteral("/var/tmp/dc-output"));
+    }
+
+    // Empty / whitespace string rejected
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY(!ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "localOutputPath": "   ",
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err));
+        QCOMPARE(err, QStringLiteral("Missing or invalid key: localOutputPath"));
+    }
+
+    // Non-string value rejected
+    {
+        AppConfig cfg;
+        QString err;
+        QVERIFY(!ConfigStore::parseJson(R"({
+            "sshKeyPath": "/tmp/key",
+            "knownHostsPath": "/tmp/kh",
+            "localOutputPath": 42,
+            "pcs": [{ "id": "pc01", "host": "10.0.0.1" }]
+        })", &cfg, &err));
+        QCOMPARE(err, QStringLiteral("Missing or invalid key: localOutputPath"));
     }
 }
 

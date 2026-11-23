@@ -62,6 +62,7 @@ class TransferController : public QObject {
     Q_PROPERTY(QString sessionPath READ sessionPath NOTIFY sessionChanged)
     Q_PROPERTY(QString windowSummary READ windowSummary NOTIFY sessionChanged)
     Q_PROPERTY(int selectedPcCount READ selectedPcCount NOTIFY sessionChanged)
+    Q_PROPERTY(bool isLocalDestination READ isLocalDestination NOTIFY sessionChanged)
     Q_PROPERTY(bool canEject READ canEject NOTIFY phaseChanged)
     Q_PROPERTY(QString ejectStatus READ ejectStatus NOTIFY ejectStatusChanged)
     Q_PROPERTY(bool ejectError READ ejectError NOTIFY ejectStatusChanged)
@@ -93,6 +94,7 @@ public:
     QString sessionPath() const { return mSessionPath; }
     QString windowSummary() const { return mWindowSummary; }
     int selectedPcCount() const { return mSelectedPcCount; }
+    bool isLocalDestination() const { return mIsLocalDestination; }
     bool canEject() const;
     QString ejectStatus() const { return mEjectStatus; }
     bool ejectError() const { return mEjectError; }
@@ -132,6 +134,7 @@ private:
     int mSelectedPcCount = 0;
 
     UsbDrive mActiveDrive;
+    bool mIsLocalDestination = false;
     QString mEjectStatus;
     bool mEjectError = false;
 };

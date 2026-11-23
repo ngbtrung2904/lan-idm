@@ -130,7 +130,7 @@ QStringList TransferController::warnings() const {
 }
 
 bool TransferController::canEject() const {
-    if (mEngine == nullptr) {
+    if (mIsLocalDestination || mEngine == nullptr) {
         return false;
     }
     const Phase p = mapPhase(mEngine->phase());
@@ -149,6 +149,7 @@ void TransferController::startSession(const SourcesController *sources,
     emit ejectStatusChanged();
 
     mActiveDrive = sources->preparedDrive();
+    mIsLocalDestination = sources->preparedIsLocalDisk();
     mSessionPath = sources->preparedSessionDir();
     mWindowSummary = sources->windowStart().toString(QStringLiteral("yyyy-MM-dd HH:mm"))
                      + QStringLiteral(" to ")
@@ -221,6 +222,11 @@ void TransferController::cancel() {
 
 void TransferController::retry() {
     if (mEngine == nullptr) {
+        return;
+    }
+
+    if (mIsLocalDestination) {
+        mEngine->retryAfterUsbReturned();
         return;
     }
 
@@ -303,7 +309,7 @@ void TransferController::onEngineJobUpdated(int row) {
 }
 
 void TransferController::onUsbDriveRemoved(const QString &mountPoint) {
-    if (mEngine == nullptr) {
+    if (mIsLocalDestination || mEngine == nullptr) {
         return;
     }
     if (mEngine->phase() == EnginePhase::Running
